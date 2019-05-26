@@ -1,0 +1,24 @@
+{
+  "name": "fonads",
+  "version": "1.0.0",
+  "description": "Truly funcitonal monads",
+  "author": "Steven Saunders <steve@sentosatech.com>",
+  "license": "MIT",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "devDependencies": {
+    "lerna": "^3.13.1"
+  },
+  "scripts": {
+    "clean": "lerna run clean",
+    "build": "lerna run build",
+    "test":  "lerna run test",
+    "watch:test": "cd packages/core && yarn watch:test",
+    "clean:modules": "lerna clean -y; rm -rf ./node_modules",
+    "clean:all": "yarn clean; yarn clean:modules",
+    "bootstrap": "lerna bootstrap",
+    "refresh": "yarn clean:all && lerna bootstrap && yarn build"
+  }
+}

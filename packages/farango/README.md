@@ -1,0 +1,1 @@
+fonad wrapper around arangoDb

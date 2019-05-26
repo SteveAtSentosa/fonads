@@ -1,0 +1,31 @@
+{
+  "name": "@fonads/farango",
+  "version": "0.0.0",
+  "main": "dist/farango.min.js",
+  "author": "Steven Saunders <steve@sentosatech.com>",
+  "description": "arango wrapped in fonads",
+  "license": "MIT",
+  "dependencies": {
+    "arangojs": "6",
+    "ramda": "^0.26.1",
+    "ramda-adjunct": "^2.16.1"
+  },
+  "scripts": {
+    "clean": "rimraf es dist lib",
+    "build:cjs": "cross-env BABEL_ENV=cjs babel src --out-dir lib",
+    "build:es": "cross-env BABEL_ENV=es babel src --out-dir es",
+    "build:umd": "webpack --mode=development --output-filename=farango.js",
+    "build:umd:min": "webpack --mode=production --output-filename=farango.min.js",
+    "build": "yarn clean && yarn build:umd:min",
+    "prepub": "yarn clean && yarn test && yarn build",
+    "test": "mocha --require @babel/register",
+    "tinker": "babel-node test/tinker.js",
+    "watch:test": "onchange 'src/**/*.js' 'test/**/*.js' -- yarn test",
+    "watch:build": "onchange 'src/**/*.js' -- yarn build:umd:min",
+    "watch:tinker": "onchange 'src/**/*.js' 'test/**/*.js' -- yarn tinker"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.4.3",
+    "@babel/node": "^7.2.2"
+  }
+}
