@@ -23,3 +23,9 @@ export const msgListToString = (msgList, appendTo='', pre='') => {
   return msgList.reduce((acc, cur, i) =>
     concat(acc, `${pre}${cur}${i<strings.length-1?'\n':''}`), appendTo/* appendTo?`${appendTo}\n`:''*/ )
 }
+
+// Given a msg string, and an array of notes, return a single string
+// TBD more docs
+export const msgAndNotes = (msg, notes) => msgListToString(
+  concat([msg], tab(notes))
+)

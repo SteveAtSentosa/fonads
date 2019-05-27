@@ -8,9 +8,11 @@ import {
   Nothing,
   isJust,
   isFault,
-  value,
+  extract,
   mapMethod,
   mapAsyncMethod,
+  addNote,
+  getNotes
 } from '../src/fonads'
 
 export default function runExtendedInterfaceTests() {
@@ -18,18 +20,29 @@ export default function runExtendedInterfaceTests() {
     const testOk = Ok()
     const testNothing = Nothing()
     const testFault = Fault()
+    const testJust = Just('testJust')
+
+    it('should append notes correctly', () => {
+      expect(getNotes(addNote('ok note',testOk))).to.deep.equal(['ok note'])
+      expect(getNotes(addNote('nothing note',testNothing))).to.deep.equal(['nothing note'])
+      expect(getNotes(addNote('just note',testJust))).to.deep.equal(['just note'])
+      addNote('f1', testFault)
+      addNote('f2', testFault)
+      expect(getNotes(testFault)).to.deep.equal([ 'f1', 'f2' ])
+    })
 
     it('should extract values correctly', () => {
-      expect(value(Just(3))).to.equal(3)
-      expect(value(Just(['a', 'b']))).to.deep.equal(['a', 'b'])
-      expect(value(5)).to.equal(5)
-      expect(value(['y', 'z'])).to.deep.equal(['y', 'z'])
-      expect(value(Ok())).to.equal(null)
-      expect(value(Fault())).to.equal(null)
-      expect(value(Nothing())).to.equal(null)
-      expect(value()).to.equal(null)
-      expect(value(null)).to.equal(null)
+      expect(extract(Just(3))).to.equal(3)
+      expect(extract(Just(['a', 'b']))).to.deep.equal(['a', 'b'])
+      expect(extract(5)).to.equal(5)
+      expect(extract(['y', 'z'])).to.deep.equal(['y', 'z'])
+      expect(extract(Ok())).to.equal(null)
+      expect(extract(Fault())).to.equal(null)
+      expect(extract(Nothing())).to.equal(null)
+      expect(extract()).to.equal(null)
+      expect(extract(null)).to.equal(null)
     })
+
     it('should map methods correctly', () => {
       class Add {
         three(v1, v2, v3) {
@@ -43,15 +56,15 @@ export default function runExtendedInterfaceTests() {
       const rawAdd = new Add()
       const r1 = mapMethod('three', [1, 2, 3], rawAdd)
       expect(isJust(r1)).to.equal(true)
-      expect(value(r1)).to.equal(6)
+      expect(extract(r1)).to.equal(6)
 
       const justAdd = Just(rawAdd)
       const r2 = mapMethod('three', [4, 5, 6], justAdd)
       expect(isJust(r2)).to.equal(true)
-      expect(value(r2)).to.equal(15)
+      expect(extract(r2)).to.equal(15)
 
-      expect(value(mapMethod('reflect', ['me'], { reflect }))).to.equal('me')
-      expect(value(mapMethod('reflect', 'me', { reflect }))).to.equal('me')
+      expect(extract(mapMethod('reflect', ['me'], { reflect }))).to.equal('me')
+      expect(extract(mapMethod('reflect', 'me', { reflect }))).to.equal('me')
 
       // check NJR
       expect(mapMethod('three', [1, 2, 3], testOk)).to.equal(testOk)
@@ -88,11 +101,11 @@ export default function runExtendedInterfaceTests() {
 
       const resolved1 = await mapAsyncMethod('resolve', ['I am resolved'], rawAsync)
       expect(isJust(resolved1)).to.equal(true)
-      expect(value(resolved1)).to.equal('I am resolved')
+      expect(extract(resolved1)).to.equal('I am resolved')
 
       const resolved2 = await mapAsyncMethod('resolve', 'I am resolved too', justAsync)
       expect(isJust(resolved2)).to.equal(true)
-      expect(value(resolved2)).to.equal('I am resolved too')
+      expect(extract(resolved2)).to.equal('I am resolved too')
 
       // TODO: when fault is reverted back to single fault rather than stack, check e
       const rejected1 = await mapAsyncMethod('reject', ['I am rejected'], rawAsync)
@@ -110,7 +123,7 @@ export default function runExtendedInterfaceTests() {
       const mapGoBetween = mapAsyncMethod('resolve', ['I am fully resolved'])
       const curryResult = await mapGoBetween(justAsync)
       expect(isJust(curryResult)).to.equal(true)
-      expect(value(curryResult)).to.equal('I am fully resolved')
+      expect(extract(curryResult)).to.equal('I am fully resolved')
 
       // check error conditions
       expect(isFault(await mapAsyncMethod('resolve', [1, 2, 3], {}))).to.equal(true)

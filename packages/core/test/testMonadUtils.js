@@ -1,26 +1,77 @@
 import { expect } from 'chai'
 
-import {
-  Just,
-  Ok,
-  Fault,
-  Nothing,
-  isJust,
-  isNothing,
-  isFault,
-  monadify,
-} from '../src/fonads'
+// import {
+//   Just,
+//   Ok,
+//   Fault,
+//   Nothing,
+//   isJust,
+//   isNothing,
+//   isFault,
+//   monadify,
+// } from '../src/fonads'
 
+import {
+  Just, Ok, Fault, Nothing, monadify,
+  isFm, isJust, isNotJust, isFault, isNotFault, isNothing, isNotNothing,
+  isOk, isNotOk, isValue, isNotValue, isStatus, isNotStatus,
+} from '../src/fonads'
 
 const testJust = Just('hanging out')
 const testOk = Ok()
 const testNothing = Nothing()
 const testFault = Fault()
-const e = new Error('barf')
+
+const ok = Ok()
+const nothing = Nothing()
+const fault = Fault('testing', 'fake msg')
+const justOne = Just(1)
+
 
 export default function runMonadUtilTests() {
   describe('utility  tests', () => {
-    it('should convert types correctly', () => {
+
+    it('should detect types correctly', () => {
+      expect(isFm(ok)).to.equal(true)
+      expect(isFm(fault)).to.equal(true)
+      expect(isFm(nothing)).to.equal(true)
+      expect(isFm(justOne)).to.equal(true)
+      expect(isFm('ok')).to.equal(false)
+      expect(isFm({})).to.equal(false)
+
+      expect(isOk(ok)).to.equal(true)
+      expect(isNotOk(ok)).to.equal(false)
+      expect(isOk(justOne)).to.equal(false)
+      expect(isOk('ok')).to.equal(false)
+      expect(isOk({ ok })).to.equal(false)
+      expect(isOk([])).to.equal(false)
+
+      expect(isJust(justOne)).to.equal(true)
+      expect(isNotJust(justOne)).to.equal(false)
+      expect(isJust(nothing)).to.equal(false)
+
+      expect(isFault(fault)).to.equal(true)
+      expect(isNotFault(fault)).to.equal(false)
+      expect(isFault(ok)).to.equal(false)
+
+      expect(isNothing(nothing)).to.equal(true)
+      expect(isNotNothing(nothing)).to.equal(false)
+      expect(isNothing(fault)).to.equal(false)
+
+      expect(isValue(nothing)).to.equal(true)
+      expect(isValue(justOne)).to.equal(true)
+      expect(isValue(fault)).to.equal(true)
+      expect(isValue(ok)).to.equal(false)
+      expect(isNotValue(justOne)).to.equal(false)
+
+      expect(isStatus(fault)).to.equal(true)
+      expect(isStatus(ok)).to.equal(true)
+      expect(isStatus(nothing)).to.equal(false)
+      expect(isStatus(justOne)).to.equal(false)
+      expect(isNotStatus(ok)).to.equal(false)
+    })
+
+    it('should monadify correctly', () => {
       expect(monadify(testJust)).to.equal(testJust)
       expect(monadify(testNothing)).to.equal(testNothing)
       expect(monadify(testFault)).to.equal(testFault)

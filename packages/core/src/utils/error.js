@@ -1,4 +1,4 @@
-import { last } from 'ramda'
+import { last, drop } from 'ramda'
 import { arrayify } from './types'
 import { msgListToString, tab } from './string'
 
@@ -54,4 +54,12 @@ export const throwIf = (condition, msg) => {
 export const throwIfP = (predicate, value, msg) => {
   throwIf(predicate(value), msg)
   return value
+}
+
+// Return call stack as an array of strings
+export const callStack = (skip=0) => {
+  const stackStr = new Error().stack
+  const stackArr = stackStr.split("\n").map(s => s.trim())
+  // skip 'Error" entry, and entry for this call at the very least
+  return drop(skip+2, stackArr)
 }

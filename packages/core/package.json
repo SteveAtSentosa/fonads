@@ -6,7 +6,7 @@
   "description": "Core fonads library",
   "license": "MIT",
   "dependencies": {
-    "flatted": "^2.0.0",
+    "json-stringify-safe": "^5.0.1",
     "ramda": "^0.26.1",
     "ramda-adjunct": "^2.16.1"
   },
@@ -20,6 +20,7 @@
     "prepub": "yarn clean && yarn test && yarn build",
     "test": "mocha --require @babel/register",
     "tinker": "babel-node tinker/tinker.js",
+    "viz": "babel-node visualize/runVizualize.js",
     "watch:test": "onchange 'src/**/*.js' 'test/**/*.js' -- yarn test",
     "watch:build": "onchange 'src/**/*.js' -- yarn build:umd:min",
     "watch:tinker": "onchange 'src/**/*.js' 'test/**/*.js' -- yarn tinker"

@@ -33,6 +33,7 @@ import Just from './Just'
 import Nothing from './Nothing'
 import Ok from './Ok'
 import Fault from './Fault'
+import stringify from 'json-stringify-safe'
 
 /*
 These have concrete implementations
@@ -81,7 +82,6 @@ Other abbreviaions
 // const hasChain = propIsFn('_chain')
 // const hasAp = propIsFn('_ap')
 // const hasExtract = propIsFn('_extract')
-const hasStatusMsg = propIsFn('_statusMsg')
 const hasInspect = propIsFn('_ap')
 // const hasType = propIsFn('_type')
 
@@ -162,7 +162,7 @@ export const map = curry((fn, maybeFm) => {
 const _checkMapMethodArgs = (op, method, args, maybeFm) => {
   const r = (shouldReturn, toReturn) => ({ shouldReturn, toReturn })
   if (isNonJustFm(maybeFm)) return r(true, maybeFm)
-  const o = value(maybeFm)
+  const o = extract(maybeFm)
   if (isNotObject(o)) return r(true, Fault(op, `Non object supplied: ${maybeFm}`))
   if (isNotFunction(o[method]))
     return r(true, Fault(op, `Method ${method} does not exist on object: ${maybeFm}`))
@@ -180,7 +180,7 @@ export const mapMethod = curry((method, args, maybeFm) => {
   const op = 'mapMethod()'
   const { shouldReturn, toReturn } = _checkMapMethodArgs(op, method, args, maybeFm)
   if (shouldReturn) return toReturn
-  const o = value(maybeFm)
+  const o = extract(maybeFm)
   try {
     return Just(o[method](...flatArrify(args)))
   } catch (e) {
@@ -206,7 +206,7 @@ const mapAsyncMethodNC = async (method, args, maybeFm) => {
   const op = 'mapAsyncMethod()'
   const { shouldReturn, toReturn } = _checkMapMethodArgs(op, method, args, maybeFm)
   if (shouldReturn) return toReturn
-  const o = value(maybeFm)
+  const o = extract(maybeFm)
   try {
     return Just(await o[method](...flatArrify(args)))
   } catch (e) {
@@ -244,7 +244,7 @@ export const ptAsycn = curry(async (fn, maybeFm ) => {
 //   For isJust(maybeFm[a]) or a,  return a
 //   for isNonJustFm(fm) or isNil(maybeFm), return null
 //   J[a] | a -> a | null
-export const value = maybeFm => {
+export const extract = maybeFm => {
   if (isNil(maybeFm) || isNonJustFm(maybeFm)) return null
   if (isJust(maybeFm)) return maybeFm._val
   return maybeFm
@@ -252,10 +252,10 @@ export const value = maybeFm => {
 
 // return a status message if the monad has one
 export const statusMsg = fm =>
-  hasStatusMsg(fm) ? fm._statusMsg() : 'no status available'
+  isFm(fm) ? fm._statusMsg() : `WARNING: can't get status for non-fm: ${stringify(fm)}`
 
 export const inspect = fm =>
-  hasInspect(fm) ? fm._inspect() : `cant inspect non-monad: ${fm}`
+  isFm(fm) ? fm._inspect() : `WARNING: cant inspect non-monad: ${fm}`
 
 export const logFm = fm => {
   if (isFm(fm)) console.log(inspect(fm))
@@ -354,10 +354,18 @@ const hereStr = here =>
   here ? ` -> ${here.file} | line ${here.line} | ${here.fn}()` : ''
 
 // Add note to FM
-export const addNote = curry((note, here, fm) => {
+export const addNote = curry((note, fm) => {
+  isFm(fm) && fm._appendNote(note)
+  return fm
+})
+
+export const getNotes = fm => isFm(fm) ? fm._notes : []
+
+export const addNoteFrom = curry((here, note, fm) => {
   fm._appendNote(`${note}${hereStr(here)}`)
   return fm
 })
+
 
 // Add note to Fault
 export const addNoteIfFault = curry((note, here, fm) =>

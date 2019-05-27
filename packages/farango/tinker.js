@@ -24,8 +24,6 @@ pipeAsync(
   switchTo(db),
   logMsgOnNonFault('... querying doc'),
   aqlQuery('FOR d in testCol FILTER d.name == "tinker" return d'),
-  // fm => { console.log(fm._val); return fm},
-  log,
   logFm,
 
   // clean up
