@@ -1,8 +1,7 @@
-import runErrorUtilTests from './testErrorUtils'
-import runMonadUtilTests from './testMonadUtils'
-import runMonadicInterfaceTests from './testMonadicInterface'
-import runExtendedInterfaceTests from './testExtendedInterface'
-
+import runErrorUtilTests from './test.errorUtils'
+import runMonadUtilTests from './test.monadUtils'
+import runMonadicInterfaceTests from './test.monadicInterface'
+import runExtendedInterfaceTests from './test.extendedInterface'
 
 describe('fonad tests', () => {
   runErrorUtilTests()
