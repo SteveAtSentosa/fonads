@@ -9,10 +9,13 @@ import {
   isJust,
   isFault,
   extract,
+  mapAsync,
   mapMethod,
   mapAsyncMethod,
+  statusMsg,
   addNote,
-  getNotes
+  getNotes,
+  logFm,
 } from '../src/fonads'
 
 export default function runExtendedInterfaceTests() {
@@ -20,28 +23,73 @@ export default function runExtendedInterfaceTests() {
     const testOk = Ok()
     const testNothing = Nothing()
     const testFault = Fault()
-    const testJust = Just('testJust')
+    const testJust = Just(99)
 
-    it('should append notes correctly', () => {
-      expect(getNotes(addNote('ok note',testOk))).to.deep.equal(['ok note'])
-      expect(getNotes(addNote('nothing note',testNothing))).to.deep.equal(['nothing note'])
-      expect(getNotes(addNote('just note',testJust))).to.deep.equal(['just note'])
-      addNote('f1', testFault)
-      addNote('f2', testFault)
-      expect(getNotes(testFault)).to.deep.equal([ 'f1', 'f2' ])
+    it('should map asycn functions correctly', async () => {
+
+      const asyncResolve = v => new Promise(
+        (resolve, reject) => setTimeout(() => { resolve(v) }, 10))
+
+      const asyncReject = a => new Promise(
+        (resolve, reject) => setTimeout(() => { reject(new Error('rejected')) }, 10))
+
+      const timeout = () => new Promise(resolve => { setTimeout(resolve, 10) })
+      const asyncThrow = async ms => {
+        await timeout(ms)
+        throw new Error('thrown');
+      }
+
+      // monadic inputs
+
+      const resolved = await mapAsync(asyncResolve, testJust)
+      expect(isJust(resolved)).to.equal(true)
+      expect(extract(resolved)).to.equal(99)
+
+      const rejected = await mapAsync(asyncReject, testJust)
+      expect(isFault(rejected)).to.equal(true)
+
+      const thrown = await mapAsync(asyncThrow, testJust)
+      expect(isFault(thrown)).to.equal(true)
+
+      // raw inputs
+
+      const resolved2 = await mapAsync(asyncResolve, 88)
+      expect(isJust(resolved2)).to.equal(true)
+      expect(extract(resolved2)).to.equal(88)
+
+      const rejected2 = await mapAsync(asyncReject, 88)
+      expect(isFault(rejected2)).to.equal(true)
+
+      const thrown2 = await mapAsync(asyncThrow, 88)
+      expect(isFault(thrown2)).to.equal(true)
+
+      // currying
+
+      const curriedResolver = mapAsync(asyncResolve)
+      const resolved3 = await curriedResolver(testJust)
+      expect(extract(resolved3)).to.equal(99)
+
+      const curriedRejector = mapAsync(asyncReject)
+      const rejected3 = await curriedRejector(null)
+      expect(isFault(rejected3)).to.equal(true)
+
+      const curriedThrower = mapAsync(asyncThrow)
+      const thrown3 = await curriedThrower([])
+      expect(isFault(thrown3)).to.equal(true)
+
+      // non just reflectivity
+
+      const reflectedOk = await curriedResolver(testOk)
+      expect(reflectedOk).to.equal(testOk)
+
+      const reflectedNothing = await curriedResolver(testNothing)
+      expect(reflectedNothing).to.equal(testNothing)
+
+      const reflectedFault = await curriedResolver(testFault)
+      expect(reflectedFault).to.equal(testFault)
     })
 
-    it('should extract values correctly', () => {
-      expect(extract(Just(3))).to.equal(3)
-      expect(extract(Just(['a', 'b']))).to.deep.equal(['a', 'b'])
-      expect(extract(5)).to.equal(5)
-      expect(extract(['y', 'z'])).to.deep.equal(['y', 'z'])
-      expect(extract(Ok())).to.equal(null)
-      expect(extract(Fault())).to.equal(null)
-      expect(extract(Nothing())).to.equal(null)
-      expect(extract()).to.equal(null)
-      expect(extract(null)).to.equal(null)
-    })
+
 
     it('should map methods correctly', () => {
       class Add {
@@ -88,7 +136,7 @@ export default function runExtendedInterfaceTests() {
         }
         reject(msg) {
           return new Promise((resolve, reject) =>
-            setTimeout(() => reject(new Error(msg)), 10)
+            setTimeout(() => reject(new Error(msg)), 10),
           )
         }
         throw(msg) {
@@ -127,7 +175,9 @@ export default function runExtendedInterfaceTests() {
 
       // check error conditions
       expect(isFault(await mapAsyncMethod('resolve', [1, 2, 3], {}))).to.equal(true)
-      expect(isFault(await mapAsyncMethod('resolve', [1, 2, 3], 'non-object'))).to.equal(true)
+      expect(isFault(await mapAsyncMethod('resolve', [1, 2, 3], 'non-object'))).to.equal(
+        true,
+      )
       expect(isFault(await mapAsyncMethod('nomethod', [], rawAsync))).to.equal(true)
       expect(isFault(await mapAsyncMethod('nomethod', [], justAsync))).to.equal(true)
       expect(isFault(await mapAsyncMethod('nonFn', [], { nonFn: [] }))).to.equal(true)

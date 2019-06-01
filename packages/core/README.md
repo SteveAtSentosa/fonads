@@ -92,15 +92,17 @@ the Fault itself.  This allows a Fault to bubble to the bottom of a functional p
 no furtner operations taking place, for proper reporting
 
 
-## Fault reflective
+## Non Just reflective
 
-All function in the fonad library are Fault Reflective.  This means, in all cases, if the last argument
-accepted by a function is a Fault, then that Fault will be immediately returned, and the function does nothing.
+All function in the fonad library are Non Just Reflective.  This means, in all cases, if the last argument
+accepted by a function, J(v) | v, is a non Just FM (i.e. Fault, Nothing, OK) nthen that non Just FM
+ will be immediately returned, and the function does nothing.
 
-This approach Facilitates Fault flow-throw in functional pipelines, and is essentially a short cut for
-map / mapAsycn
+This approach mimics the behviour of the core monadic functions chain() and map() and
+facilites Fault (and Ok/Nothing) flow-throw in functional pipelines, and is essentially
+a short cut for mapping/chaining,
 
-The key letters `FR` are used in function documentation to indicate fault reflectivity
+The key letters `NJR` are used in function documentation to indicate non-just reflectivity
 
 
 ### Exception safe

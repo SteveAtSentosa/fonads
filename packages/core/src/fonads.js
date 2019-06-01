@@ -1,10 +1,6 @@
 // TODO
-// * convert Fault to single instead of multiple
-// * For any fns that create a fault, transfer notes from incoming fm to fault?? Could be tough
 // * When faults generated w/in fonad utils, report module/line of caller (require allow here() to be bassed in)
 // * allow loggers to be passed in for logging?
-// * make call stack an array
-// * get statsMsg vs. inspect solid, and use consitently in these utils
 
 // import * as R from 'ramda';
 // import * as RA from 'ramda-adjunct';
@@ -77,16 +73,8 @@ Other abbreviaions
 // Monadic type checkers
 //*****************************************************************************
 
-// May not need
-// const hasMap = propIsFn('_map')
-// const hasChain = propIsFn('_chain')
-// const hasAp = propIsFn('_ap')
-// const hasExtract = propIsFn('_extract')
-const hasInspect = propIsFn('_ap')
-// const hasType = propIsFn('_type')
-
 // a -> bool
-export const isFm = maybeFm => isObject(maybeFm) && propEq('_tag', '@@FMonad', maybeFm)
+export const isFm = $fm => isObject($fm) && propEq('_tag', '@@FMonad', $fm)
 export const isNotFm = complement(isFm)
 
 // 'type' -> fm -> bool
@@ -117,70 +105,117 @@ export const isStatus = fm => isOk(fm) || isFault(fm)
 export const isNotStatus = complement(isStatus)
 
 // fm -> bool
-// TODO: same is isJust ?? If so depcreate and switch callers to isJust
+// returns true if isFm(fm) && isNotJust(fm), otherwise returns false
 export const isNonJustFm = fm => isFm(fm) && isNotJust(fm)
 
 //*****************************************************************************
-// Relaxed Monadic Interface
+// Core Monadic Interface
+// Exposes fn's implemented directly by all monads
 //*****************************************************************************
 
-// chain (relaxed)
+// chain
 //   Can accept either a monad, or a raw value to be chained thorugh `fn`
-//   If isFm(maybeFm) where maybeFm(v), returns result of calling fn(v)
-//   If isNotFm(maybeFm), returns result of calling fn(maybeFm)
+//   If isFm($fm) where $fm(v), returns result of calling fn(v)
+//   If isNotFm($fm), returns result of calling fn($fm)
 //   If an exception is thrown as a result of calling fn, a Fault is returned
 //   (a->b) -> J[a] | a -> b | F
-export const chain = curry((fn, maybeFm) => {
+export const chain = curry((fn, $fm) => {
   const op = 'chain()'
   try {
-    return isFm(maybeFm) ? maybeFm._chain(fn) : fn(maybeFm)
+    return isFm($fm) ? $fm._chain(fn) : fn($fm)
   } catch (e) {
     return Fault(op, 'Exception thrown by chain function', e)
   }
 })
 
-// map (relaxed)
+// map
 // Can accept either a monad, or a raw value to be mapped thorugh `fn`
-//   If isFm(maybeFm) where maybeFm<T>(v), result of fn(v) is returned monad of type T
-//   If isNotFm(maybeFm), return Just(fn(maybeFm))
+//   If isFm($fm) where $fm(v), returns Just(fn(v))
+//   If isNotFm($fm), returns Just(fn($fm))
 //   If an exception is thrown as a result of calling fn, a Fault is returned
 //   (a->b) -> J[a] | a -> J[b] | F
-export const map = curry((fn, maybeFm) => {
+export const map = curry((fn, $fm) => {
   const op = 'map()'
   try {
-    return isFm(maybeFm) ? maybeFm._map(fn) : Just(fn(maybeFm))
+    return isFm($fm) ? $fm._map(fn) : Just(fn($fm))
   } catch (e) {
     return Fault(op, 'Exception thrown by map function', e)
   }
 })
 
+// extract
+// Extract the value being held/reprsented by a monad
+//    extract(J(v)) -> v
+//    extract(Nothing) -> null
+//    extract(Ok) -> true
+//    extract(Fault) -> false
+//    extract(v) -> v
+export const extract = $fm => {
+  if (isJust($fm)) return $fm._val
+  if (isNothing($fm)) return null
+  if (isOk($fm)) return true
+  if (isFault($fm)) return false
+  return $fm
+}
+
+// return a status message if the monad has one
+export const statusMsg = fm =>
+  isFm(fm) ? fm._statusMsg() : `WARNING: can't get status for non-fm: ${stringify(fm)}`
+
+// return a resonable string representation of a monad
+export const inspect = fm =>
+  isFm(fm) ? fm._inspect() : `WARNING: cant inspect non-monad: ${fm}`
+
+// Add note to FM
+export const addNote = curry((note, fm) => {
+  isFm(fm) && fm._appendNote(note)
+  return fm
+})
+
+
 //*****************************************************************************
 // Extended Monadic Interface
+// Monadic interface for async fn's and Just(an-instantiated-class)
 //*****************************************************************************
 
+// mapAsync (NJR)
+//   map an async function over a fonad, returning a promise
+//   If asycnFn rejects of throws an exception, a representative Fault is returned
+//   async(a->b) -> Just(a) | a -> P(Just(b)) | P(Fault)
+export const mapAsync = curry(async (asycnFn, $fm) => {
+  const op = 'mapAsync()'
+  if (isNonJustFm($fm)) return $fm
+  try {
+    return Just(await asycnFn(extract($fm)))
+  } catch (e) {
+    return Fault(op, 'Exception thrown by async fn', e)
+  }
+})
+
 // Returns { shouldReturn: bool, toReturn: a }
-const _checkMapMethodArgs = (op, method, args, maybeFm) => {
+const _checkMapMethodArgs = (op, method, args, $fm) => {
   const r = (shouldReturn, toReturn) => ({ shouldReturn, toReturn })
-  if (isNonJustFm(maybeFm)) return r(true, maybeFm)
-  const o = extract(maybeFm)
-  if (isNotObject(o)) return r(true, Fault(op, `Non object supplied: ${maybeFm}`))
+  if (isNonJustFm($fm)) return r(true, $fm)
+  const o = extract($fm)
+  if (isNotObject(o)) return r(true, Fault(op, `Non object supplied: ${$fm}`))
   if (isNotFunction(o[method]))
-    return r(true, Fault(op, `Method ${method} does not exist on object: ${maybeFm}`))
+    return r(true, Fault(op, `Method ${method} does not exist on object: ${$fm}`))
   return r(false, 'args are good')
 }
 
-// map over a class method | RLX, NJR
-// For cases when a, of Just(a) is a class
-//   if isJust(maybeFm), for fm[a] calls a.method() and returns the result b in J[b]
+
+// mapMethod (NJR)
+//   map over a class method for cases when a, of Just(a) is an instantiated class
+//   if isJust($fm), for fm[a] calls a.method() and returns the result b in J[b]
 //   if isFm(a) and isNotJust(a), reflects fm
 //   if isNotFm(fm), calls fm.method() and and returns the result b in J[b]
 //   If an exception is thrown as a result of a.method(), a Fault is returned
 //   'fn-name' -> [ arg1, arg2, ...] | singleArg -> J[a] | a -> J[b] | F
-export const mapMethod = curry((method, args, maybeFm) => {
+export const mapMethod = curry((method, args, $fm) => {
   const op = 'mapMethod()'
-  const { shouldReturn, toReturn } = _checkMapMethodArgs(op, method, args, maybeFm)
+  const { shouldReturn, toReturn } = _checkMapMethodArgs(op, method, args, $fm)
   if (shouldReturn) return toReturn
-  const o = extract(maybeFm)
+  const o = extract($fm)
   try {
     return Just(o[method](...flatArrify(args)))
   } catch (e) {
@@ -188,25 +223,28 @@ export const mapMethod = curry((method, args, maybeFm) => {
   }
 })
 
+
+// TODO: convert this to using `pt` fn
+
 // map method, and if succeful pass through maybeMF
 // TODO: better docs needed
-export const mapMethodPT = curry((method, args, maybeFm) => {
-  const result = mapMethod(method, args, maybeFm)
-  return isFault(result) ? result : maybeFm
+export const mapMethodPT = curry((method, args, $fm) => {
+  const result = mapMethod(method, args, $fm)
+  return isFault(result) ? result : $fm
 })
 
-export const mapMethodIfConditionPT = curry((condition, method, args, maybeFm) =>
-  condition ? mapMethodPT(method, args, maybeFm) : maybeFm,
+export const mapMethodIfConditionPT = curry((condition, method, args, $fm) =>
+  condition ? mapMethodPT(method, args, $fm) : $fm,
 )
 
 // map over an asynchronous class method | RLX, NJR
 // Same as mapMethod, but for async methods.
 // Never rejects, always returns promise that will resolve with same values as mapMethod
-const mapAsyncMethodNC = async (method, args, maybeFm) => {
+const mapAsyncMethodNC = async (method, args, $fm) => {
   const op = 'mapAsyncMethod()'
-  const { shouldReturn, toReturn } = _checkMapMethodArgs(op, method, args, maybeFm)
+  const { shouldReturn, toReturn } = _checkMapMethodArgs(op, method, args, $fm)
   if (shouldReturn) return toReturn
-  const o = extract(maybeFm)
+  const o = extract($fm)
   try {
     return Just(await o[method](...flatArrify(args)))
   } catch (e) {
@@ -216,46 +254,21 @@ const mapAsyncMethodNC = async (method, args, maybeFm) => {
 
 // TODO: smarter way to do the currying?
 // curried version
-export const mapAsyncMethod = curry((method, args, maybeFm) =>
-  mapAsyncMethodNC(method, args, maybeFm),
+export const mapAsyncMethod = curry((method, args, $fm) =>
+  mapAsyncMethodNC(method, args, $fm),
 )
 
 
-// map asycn method, and if succeful pass through maybeMF
-// TODO: better docs needed
-export const mapAsyncMethodPT = curry((method, args, maybeFm) =>
-  pipeAsync(
-    mapAsyncMethod(method, args),
-    switchToOnNonFault(Just(maybeFm))
-  )(maybeFm)
-)
-
-// for any fn that takes an single arg $fm and that returns an FM, call that fn supplying maybeFM.  If that
-// fn returns a fault, returns the fault, otherwise reflects maybeFm
+// for any fn that takes an single arg $fm and that returns an FM, call that fn supplying $fm.  If that
+// fn returns a fault, returns the fault, otherwise reflects $fm
 // () => [] => $fm
 // TODO: make parallael pt that is not asynch ... rename pta ?
-export const ptAsycn = curry(async (fn, maybeFm ) => {
-  const res = await fn(maybeFm)
-  return isFault(res) ? res : Just(maybeFm)
+export const ptAsycn = curry(async (fn, $fm ) => {
+  const res = await fn($fm)
+  return isFault(res) ? res : Just($fm)
 })
 
 
-// Return value
-//   For isJust(maybeFm[a]) or a,  return a
-//   for isNonJustFm(fm) or isNil(maybeFm), return null
-//   J[a] | a -> a | null
-export const extract = maybeFm => {
-  if (isNil(maybeFm) || isNonJustFm(maybeFm)) return null
-  if (isJust(maybeFm)) return maybeFm._val
-  return maybeFm
-}
-
-// return a status message if the monad has one
-export const statusMsg = fm =>
-  isFm(fm) ? fm._statusMsg() : `WARNING: can't get status for non-fm: ${stringify(fm)}`
-
-export const inspect = fm =>
-  isFm(fm) ? fm._inspect() : `WARNING: cant inspect non-monad: ${fm}`
 
 export const logFm = fm => {
   if (isFm(fm)) console.log(inspect(fm))
@@ -354,10 +367,10 @@ const hereStr = here =>
   here ? ` -> ${here.file} | line ${here.line} | ${here.fn}()` : ''
 
 // Add note to FM
-export const addNote = curry((note, fm) => {
-  isFm(fm) && fm._appendNote(note)
-  return fm
-})
+// export const addNote = curry((note, fm) => {
+//   isFm(fm) && fm._appendNote(note)
+//   return fm
+// })
 
 export const getNotes = fm => isFm(fm) ? fm._notes : []
 
@@ -480,7 +493,7 @@ export const capture = curry((captureHere, fm) => {
 // export const isNotStatus = R.complement(isStatus);
 
 // // TODO: better to this thorugh duck typing so that you don't have to add here whenever new monad created ??
-// export const isFm = maybeFm => R.prop("_tag",maybeFm) === '@@FMonad';
+// export const isFm = $fm => R.prop("_tag",$fm) === '@@FMonad';
 
 // export const isNotFm = R.complement(isFm);
 
