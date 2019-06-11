@@ -24,19 +24,20 @@ These have concrete implementations across all monads
 
 ### Async monadic interface
 
-|              | Just                     | Nothing       | Fault             | Ok             | Non FM            |
-|-------------:|--------------------------|---------------|-------------------|----------------|-------------------|
-| mapAsync     | af->J[a]->P(J[fa(a)])    | -> self       | -> self           | -> self        | f->as->P(J[f(a)]) |
-| chainAsync   | af->J[a]->P(af(a))       | -> self       | -> self           | -> self        | f->a-> P(f(a))    |
-| apAsync      | J1[f]->J2[a]->P(J[f(a)]) | -> self       | -> self           | -> self        | f]->a->P(J[f(a)]) |
+|              | Just                     | Nothing       | Fault           | Ok             | Non FM            |
+|-------------:|--------------------------|---------------|-----------------|----------------|-------------------|
+| mapAsync     | af->J[a]->P(J[fa(a)])    | -> P(self)    | -> P(self)      | -> P(self)     | f->as->P(J[f(a)]) |
+| chainAsync   | af->J[a]->P(af(a))       | -> P(self)    | -> P(self)      | -> P(self)     | f->a-> P(f(a))    | TBD
+| apAsync      | J1[f]->J2[a]->P(J[f(a)]) | -> P(self)    | -> P(self)      | -> P(self)     | f]->a->P(J[f(a)]) | TBD
 
 
 ### Monads interface for class instantiations
 
 i.e. the value held by a monad is a class instantiation
-
-
-
+|                | Just                     | Nothing     | Fault       | Ok             | Non FM                |
+|---------------:|--------------------------|-------------|-------------|----------------|-----------------------|
+| mapMethod      | 'm'->J[o]->J[o.m()]      | -> self     | -> self     | -> self        | 'm'->o->J[o.m()])     |
+| mapAsyncMethod | 'am'->J[o]->P(J[o.am()]) | -> P(self)  | -> P(self)  | -> P(self)     | 'am'->o-> P(J[o.am()])|
 
 
 # Monad Constructs (Unions)
@@ -177,6 +178,12 @@ talk about mapMethod, mapMethodAsycn (and chain, and ap)
 
 All functions within the fonad library are curried allowing any fonad function to be used in a
 monadic pipeline.
+
+
+### Predicated action lists
+
+The fonads library uses the concept of predicated action list.
+TBD
 
 ### Notes
 

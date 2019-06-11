@@ -1,11 +1,11 @@
 import runErrorUtilTests from './test.errorUtils'
 import runMonadUtilTests from './test.monadUtils'
 import runMonadicInterfaceTests from './test.monadicInterface'
-import runExtendedInterfaceTests from './test.extendedInterface'
+import runEnhancedInterfaceTests from './test.enhancedInterface'
 
 describe('fonad tests', () => {
-  // runErrorUtilTests()
-  // runMonadUtilTests()
-  // runMonadicInterfaceTests()
-  runExtendedInterfaceTests()
+  runErrorUtilTests()
+  runMonadUtilTests()
+  runMonadicInterfaceTests()
+  runEnhancedInterfaceTests()
 })

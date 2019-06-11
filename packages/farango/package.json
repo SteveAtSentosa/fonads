@@ -7,6 +7,7 @@
   "license": "MIT",
   "dependencies": {
     "arangojs": "6",
+    "json-stringify-safe": "^5.0.1",
     "ramda": "^0.26.1",
     "ramda-adjunct": "^2.16.1"
   },
