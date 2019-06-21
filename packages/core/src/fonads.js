@@ -9,9 +9,10 @@
 // import LG from 'ramda-lens-groups';
 
 import { curry, propEq, complement, isNil, drop, pipe, keys } from 'ramda'
+import { mergeLeft as R_mergeLeft } from 'ramda'
 import { isObject, isFunction, isNotFunction, isString, isNotObject } from 'ramda-adjunct'
 import stringify from 'json-stringify-safe'
-import { flatArrify } from './utils/types'
+import { flatArrayify } from './utils/types'
 import { isError, here, hereStr } from './utils/error'
 import { pipeAsync, composeAsync, reflect } from './utils/fn'
 
@@ -19,6 +20,7 @@ import Just from './Just'
 import Nothing from './Nothing'
 import Ok from './Ok'
 import Fault from './Fault'
+import Passthrough from './Passthrough'
 
 //*****************************************************************************
 // Fonad type checkers
@@ -46,6 +48,10 @@ export const isNotNothing = complement(isNothing)
 // fm -> bool
 export const isOk = isType('Ok')
 export const isNotOk = complement(isOk)
+
+// fm -> bool
+export const isPassthrough = isType('Passthrough')
+export const isNotPassthrough = complement(isPassthrough)
 
 // fm -> bool
 export const isValue = fm => isJust(fm) || isFault(fm) || isNothing(fm)
@@ -93,6 +99,30 @@ export const map = curry((fn, $fm) => {
   }
 })
 
+// TODO: test.  better docs
+// TODO: perhaps deprecate this in favor of map with curried functions
+// mapWithArgs
+//   Similar to map, but for functions that require multiple args
+//   For Just(a) will call fn(...preceedingArgs, a)
+//   If an exception is thrown as a result of calling fn, a Fault is returned
+//   (( x | [x1, x2, ...],a)->b) -> J[a] | a -> J[b] | F
+export const mapWithArgs = curry((fn, preceedingArgs, $fm) => {
+  if (isNonJustFm($fm)) return $fm
+  const op = 'mapWithArgs()'
+  try {
+    const val = isJust($fm) ? $fm._val : $fm
+    return Just(fn(...flatArrayify(preceedingArgs), val))
+  } catch (e) {
+    return Fault(op, `Exception thrown by mapWithArgs function, args supplied: ${stringify(preceedingArgs)} `, e)
+  }
+})
+
+export const mapTo = curry((fn, mapToHere, $fm) => {
+  const res = fn(extract($fm))
+  convertToJust(res, mapToHere)
+  return $fm
+})
+
 // extract
 //   Extract the value being held/reprsented by a monad
 //   extract(J(v)) -> v
@@ -108,16 +138,17 @@ export const extract = $fm => {
   return $fm
 }
 
+export const x = extract
+
 // return a status message
-export const statusMsg = fm =>
-  isFm(fm) ? fm._statusMsg() : `WARNING: can't get status for non-fm: ${stringify(fm)}`
+export const statusMsg = fm => (isFm(fm) ? fm._statusMsg() : `WARNING: can't get status for non-fm: ${stringify(fm)}`)
 
 // return a resonable string representation of a monad
 export const inspect = fm => (isFm(fm) ? fm._inspect() : `WARNING: cant inspect non-monad: ${fm}`)
 
 // Add note to FM
 export const addNote = curry((note, $fm) => {
-  const fm = isFm($fm) ? $fm : Just(fm)
+  const fm = isFm($fm) ? $fm : Just($fm)
   fm._appendNote(note)
   return fm
 })
@@ -142,7 +173,7 @@ export const mapAsync = curry(async (asycnFn, $fm) => {
 })
 
 // mapMethod (NJR)
-//   map over a class method for cases when a, of Just(a) is an instantiated class
+//   map over a class method for cases when a, of Just(a) is an instantiateClassd class
 //   if isJust($fm), for fm[a] calls a.method() and returns the result b in J[b]
 //   if isNotFm(fm), calls fm.method() and and returns the result b in J[b]
 //   If an exception is thrown as a result of a.method(), a Fault is returned
@@ -154,7 +185,7 @@ export const mapMethod = curry((method, args, $fm) => {
   if (shouldReturn) return toReturn
   const o = extract($fm)
   try {
-    return Just(o[method](...flatArrify(args)))
+    return Just(o[method](...flatArrayify(args)))
   } catch (e) {
     return Fault(op, `Exception thrown by map method '${method}'`, e)
   }
@@ -172,7 +203,7 @@ export const mapAsyncMethod = curry(async (method, args, $fm) => {
   if (shouldReturn) return toReturn
   const o = extract($fm)
   try {
-    return Just(await o[method](...flatArrify(args)))
+    return Just(await o[method](...flatArrayify(args)))
   } catch (e) {
     return Fault(op, `Exception thrown by async map method '${method}'`, e)
   }
@@ -224,7 +255,7 @@ export const callMethod = curry((method, args, $fm) => {
   if (shouldReturn) return toReturn
   const o = extract($fm)
   try {
-    const res = o[method](...flatArrify(args))
+    const res = o[method](...flatArrayify(args))
     return isFault(res) ? res : Just($fm)
   } catch (e) {
     return Fault(op, `Exception thrown by method '${method}'`, e)
@@ -237,7 +268,7 @@ export const callMethod = curry((method, args, $fm) => {
 //  ifIsNotFunc(condnOrPred) calls method if condnOrPred itself is true
 export const callMethodIf = curry((condOrPred, method, args, $fm) => {
   if (isNonJustFm($fm)) return $fm
-  if (_evalCondOrPred(condOrPred, $fm)) return callMethod(method, args, $fm)
+  if (_condOrPred(condOrPred, $fm)) return callMethod(method, args, $fm)
   return Just($fm)
 })
 
@@ -253,24 +284,24 @@ export const callAsyncMethod = curry(async (method, args, $fm) => {
   if (shouldReturn) return toReturn
   const o = extract($fm)
   try {
-    const res = await o[method](...flatArrify(args))
+    const res = await o[method](...flatArrayify(args))
     return isFault(res) ? res : Just($fm)
   } catch (e) {
     return Fault(op, `Exception thrown by async method '${method}'`, e)
   }
 })
 
-// instantiate
+// instantiateClass
 //   TODO: write tests
 //   Given a class and a single constructor arg, or an array of multiple
-//   constructor args, return corresponding instantiated class wrapped in Just
+//   constructor args, return corresponding instantiateClassd class wrapped in Just
 //   If an exception is thrown by the constructor, F is returned
 //   className is used for error logging only
 //   'className' -> Class -> arg | [args] -> J({instanitaed-class}) | F
-export const instantiate = curry((className, Class, args) => {
+export const instantiateClass = curry((className, Class, args) => {
   const op = 'instantiating class'
   try {
-    return Just(new Class(...flatArrify(args)))
+    return Just(new Class(...flatArrayify(args)))
   } catch (e) {
     return Fault(op, `Exception thrown during constrcution of class ${className}`, e)
   }
@@ -283,12 +314,10 @@ export const addTaggedNote = curry((note, here, $fm) => addNote(`${note}${hereSt
 // addTaggedNoteIf
 //   TODO: better docs
 export const addTaggedNoteIf = curry((condOrPred, note, here, $fm) =>
-  _evalCondOrPred(condOrPred, $fm) ? addNote(`${note}${hereStr(here)}`, $fm) : Just($fm),
+  _condOrPred(condOrPred, $fm) ? addNote(`${note}${hereStr(here)}`, $fm) : Just($fm),
 )
 
-export const addNoteIf = curry((condOrPred, note, $fm) =>
-  _evalCondOrPred(condOrPred, $fm) ? addNote(note, $fm) : Just($fm),
-)
+export const addNoteIf = curry((condOrPred, note, $fm) => (_condOrPred(condOrPred, $fm) ? addNote(note, $fm) : Just($fm)))
 
 // Returns { shouldReturn: bool, toReturn: a }
 const _checkMapMethodArgs = (op, method, args, $fm) => {
@@ -296,12 +325,11 @@ const _checkMapMethodArgs = (op, method, args, $fm) => {
   if (isNonJustFm($fm)) return r(true, $fm)
   const o = extract($fm)
   if (isNotObject(o)) return r(true, Fault(op, `Non object supplied: ${$fm}`))
-  if (isNotFunction(o[method]))
-    return r(true, Fault(op, `Method ${method} does not exist on object: ${$fm}`))
+  if (isNotFunction(o[method])) return r(true, Fault(op, `Method '${method}' does not exist on object: ${stringify(o)}`))
   return r(false, 'args are good')
 }
 
-const _evalCondOrPred = (condOrPred, fm) => {
+const _condOrPred = (condOrPred, fm) => {
   // console.log('condOrPred: ', condOrPred)
   // console.log('isFunction(condOrPred): ', isFunction(condOrPred))
   // console.log(fm)
@@ -338,33 +366,48 @@ const caseOf = (predActionList, $fm) => {
 // Use with CaseOf as a fallback predicate action
 export const orElse = () => true
 
+export const returnIf = curry((condOrPred, fm) => (_condOrPred(condOrPred, fm) ? Passthrough(fm) : Just(fm)))
+
+export const done = fm => isPassthrough(fm) ? fm._fmToWPassthrough : fm
+
+// export const addNoteIf = curry((condOrPred, note, $fm) => (_condOrPred(condOrPred, $fm) ? addNote(note, $fm) : Just($fm)))
+
 // call
 //   call a function recieving a single $fm argument (typically curried)
 //
 //   call
 
-// TODO: Obsolute
-// TODO: convert this to using `pt` fn ??
-// map method, and if succeful pass through maybeMF
-// TODO: better docs needed
-export const mapMethodPT = curry((method, args, $fm) => {
-  const result = mapMethod(method, args, $fm)
-  return isFault(result) ? result : $fm
-})
+// // TODO: Obsolute
+// // TODO: convert this to using `pt` fn ??
+// // map method, and if succeful pass through maybeMF
+// // TODO: better docs needed
+// export const mapMethodPT = curry((method, args, $fm) => {
+//   const result = mapMethod(method, args, $fm)
+//   return isFault(result) ? result : $fm
+// })
 
-// TODO: change to callMethodIf
-export const mapMethodIfConditionPT = curry((condition, method, args, $fm) =>
-  condition ? mapMethodPT(method, args, $fm) : $fm,
-)
+// // TODO: change to callMethodIf
+// export const mapMethodIfConditionPT = curry((condition, method, args, $fm) => (condition ? mapMethodPT(method, args, $fm) : $fm))
 
-// TODO: obsolete
-// for any fn that takes an single arg $fm and that returns an FM, call that fn supplying $fm.  If that
-// fn returns a fault, returns the fault, otherwise reflects $fm
-// () => [] => $fm
-// TODO: make parallael pt that is not asynch ... rename pta ?
-export const ptAsycn = curry(async (fn, $fm) => {
-  const res = await fn($fm)
-  return isFault(res) ? res : Just($fm)
+// // TODO: obsolete
+// // for any fn that takes an single arg $fm and that returns an FM, call that fn supplying $fm.  If that
+// // fn returns a fault, returns the fault, otherwise reflects $fm
+// // () => [] => $fm
+// // TODO: make parallael pt that is not asynch ... rename pta ?
+// export const ptAsycn = curry(async (fn, $fm) => {
+//   const res = await fn($fm)
+//   return isFault(res) ? res : Just($fm)
+// })
+
+//*****************************************************************************
+// Manipulation of Just wrapped data
+//*****************************************************************************
+
+// TODO: docs, tests
+// TODO: probably depracate in favor of mapWithArgs + ramda.mergeLeft
+export const mergeLeft = curry((mergeTarget, $fm) => {
+  if (isNonJustFm($fm)) return $fm
+  return Just(R_mergeLeft(mergeTarget, extract($fm)))
 })
 
 //*****************************************************************************
@@ -379,11 +422,7 @@ export const logMsg = curry((msg, fm) => {
   return fm
 })
 
-
-export const logMsgIf = curry((condOrPred, msg, $fm) =>
-  _evalCondOrPred(condOrPred, $fm) ? logMsg(msg, $fm) : $fm
-)
-
+export const logMsgIf = curry((condOrPred, msg, $fm) => (_condOrPred(condOrPred, $fm) ? logMsg(msg, $fm) : $fm))
 
 // log (PT)
 //   Log and return fmOrVal.
@@ -394,6 +433,11 @@ export const log = fmOrVal => {
   else console.log('Non FM:', fmOrVal)
   return fmOrVal
 }
+
+export const logIf = curry((condOrPred, $fm) => {
+  _condOrPred(condOrPred, $fm) && log($fm)
+  return $fm
+})
 
 // logRaw (PT)
 //   Log and return val.
@@ -420,28 +464,27 @@ export const logStatus = fm => {
 
 // --- the line ------------------------------------
 
-export const logMsgOnNonFault = curry((msg, fmOrVal) => {
-  if (isNotFault(fmOrVal)) console.log(msg)
-  return fmOrVal
-})
+// export const logMsgOnNonFault = curry((msg, fmOrVal) => {
+//   if (isNotFault(fmOrVal)) console.log(msg)
+//   return fmOrVal
+// })
 
-export const logFmWithMsg = curry((msg, fm) => {
-  console.log(msg)
-  return logFm(fm)
-})
+// export const logFmWithMsg = curry((msg, fm) => {
+//   console.log(msg)
+//   return logFm(fm)
+// })
 
-export const logValWithMsg = curry((msg, val, fm) => {
-  console.log(msg)
-  console.log(val)
-  return fm
-})
+// export const logValWithMsg = curry((msg, val, fm) => {
+//   console.log(msg)
+//   console.log(val)
+//   return fm
+// })
 
 //*****************************************************************************
 // Monadic helpers
 //*****************************************************************************
 
-export const monadify = a =>
-  isFm(a) ? a : isNil(a) ? Nothing() : isError(a) ? Fault('', '', a) : Just(a)
+export const monadify = a => (isFm(a) ? a : isNil(a) ? Nothing() : isError(a) ? Fault('', '', a) : Just(a))
 
 // propagate (NJR)
 //   TODO: docs
@@ -449,9 +492,8 @@ export const monadify = a =>
 //   if isJust(fm) | isNotFm(fm), returns toPropagate
 //   this allows a new value to be inserted in to the pipeline on non error states
 
-export const propagate = curry(($toPropagate, fm) =>
-  isJust(fm) || isNotFm(fm) ? Just($toPropagate) : fm,
-)
+export const propagate = curry(($toPropagate, fm) => (isJust(fm) || isNotFm(fm) ? Just($toPropagate) : fm))
+export const switchTo = propagate
 
 //--- the line -----------------------------------------------------------------
 
@@ -523,9 +565,10 @@ export const toStatus = fm => {
   return fm
 }
 
-export const capture = curry((captureHere, fm) => {
-  isJust(fm) && convertToJust(fm._val, captureHere)
-  return fm
+export const capture = curry((captureHere, $fm) => {
+  // isJust(fm) && convertToJust(fm._val, captureHere)
+  convertToJust(extract($fm), captureHere)
+  return $fm
 })
 
 // call fnToCall(fm)
@@ -953,5 +996,5 @@ export const capture = curry((captureHere, fm) => {
 //}
 // export default M
 
-export { Just, Nothing, Ok, Fault }
+export { Just, Nothing, Ok, Fault, Passthrough }
 export { pipeAsync, composeAsync, reflect, here }

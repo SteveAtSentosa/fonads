@@ -1,35 +1,39 @@
-// TODO:
-// * better documentation
-
-import { curry } from 'ramda'
+import { curry, mergeLeft } from 'ramda'
 import { Database, aql } from 'arangojs'
 import stringify from 'json-stringify-safe'
 import { Ok, Just, Fault } from '@fonads/core'
 import { isFault, isNonJustFm, value } from '@fonads/core'
 import { caseOf, orElse } from '@fonads/core'
-import { log, logRaw, logMsg, logStatus, addNoteIf, addTaggedNoteIf } from '@fonads/core'
-import { mapMethod, callMethodIf, mapAsyncMethod, propagate } from '@fonads/core'
-import { pipeAsync, instantiate, reflect, here } from '@fonads/core'
+import { log, logRaw, logMsg, logWithMsg, addNoteIf, addTaggedNoteIf, returnIf, done } from '@fonads/core'
+import { mapMethod, callMethod, callMethodIf, mapWithArgs, mapAsyncMethod, map, propagate, extract } from '@fonads/core'
+import { pipeAsync, instantiateClass, reflect, here } from '@fonads/core'
 // import { addNoteIfFault, setRootCauseIfFault, logFm, log, logFmWithMsg } from '@fonads/core'
+
+
+
+
+// TODO: make all args $ (fm or val)
+// * Tinker again with the idea of a passthrough monad
+// * make and x = extract, for better shorthand
 
 const defaultServerUrl = 'http://127.0.0.1:8529'
 
-// openServerConnection
-//   open a connection do arango server
-//   To connect to lcoal server, pass serverUrl as 'local'
+// openConnection
+//   open a connection to arango server
+//   To connect to lcoal server, pass url as 'local'
 //   'url' -> 'un' -> 'pw' -> J(arangoServerConnection) | F
 export const openConnection = curry(async (url , un , pw) =>
   pipeAsync(
-    _connectionOptions,
-    instantiate('arrango Database', Database),
+    _makeConnectionOptions,
+    instantiateClass('arrango Database', Database),
     _applyCredsToConnection(un, pw),
-    _checkServerConnection,
-    addTaggedNoteIf(isFault, `Unable tp connect to arango server w these options: ${stringify(_connectionOptions(url))}`, here()),
+    _validateConnection,
+    addTaggedNoteIf(isFault, `Unable to connect to arango server w these options: ${stringify(_makeConnectionOptions(url))}`, here()),
     addNoteIf(isFault, 'Server may not be running, URL may be incorrect, or un/pw may be incorrect'),
   )(url))
 
 // generates arrango server connections options object
-const _connectionOptions = url => ({
+const _makeConnectionOptions = url => ({
   url: url === 'local' ? defaultServerUrl : url
 })
 
@@ -38,28 +42,108 @@ const _connectionOptions = url => ({
 const _applyCredsToConnection = curry((un, pw, $connection) =>
   callMethodIf(un && pw, 'useBasicAuth', [un, pw], $connection))
 
-// Check an arango server connection [ FOP ]
-// Return F if connection is not valid, otherwise reflect $arangoServer
-// $asc | Just($asc) -> P[ J($asc) | Fault ]
-const _checkServerConnection = async $connection =>
+// Check an arango server connection (FOP)
+//   Return F if connection is not valid, otherwise reflect $arangoServer
+//   $connection | Just($connection) -> P[ J($connection) | Fault ]
+const _validateConnection = async $connection =>
   pipeAsync(
     mapAsyncMethod('query', aql`RETURN ${Date.now()}`),
     mapAsyncMethod('next', null),
     propagate($connection),
   )($connection)
 
-// // Create a database
-// // TODO: Test that this curry / asycn approach really works
-// //       If so, fonads:mapAsyncMethod can be converted to this approach
-// //       WHY do I have asycn here ?????  probably has to do with curring and partial arhuments, and asycn
-// // Also, if DB already exists, just return it
-// export const createDatabase = curry(async (name, $db) =>
-//   pipeAsync(
-//     mapAsyncMethod('createDatabase', name),
-//     setRootCauseIfFault(`Unable to create database named '${name}'`, here()),
-//     propagateOnJust($db),
-//   )($db)
-// )
+
+// createDatabase (FOP)
+// 'dbName' -> $connection | J($connection) -> J($connection) | F
+export const createDatabase = curry(async ($dbName, $connection) => {
+  if (isNonJustFm($connection)) return $connection
+  return pipeAsync(
+    mapAsyncMethod('createDatabase', extract($dbName)),
+    addTaggedNoteIf(isFault, `Unable to create database ${extract($dbName)}`, here()),
+    propagate($connection),
+  )($connection)
+})
+
+export const createDatabase2 = curry(async ($dbName, $connection) =>
+  pipeAsync(
+    returnIf(isNonJustFm),
+    logWithMsg('after returnIf'),
+    mapAsyncMethod('createDatabase', extract($dbName)),
+    addTaggedNoteIf(isFault, `Unable to create database ${extract($dbName)}`, here()),
+    propagate($connection), done
+  )($connection))
+
+
+// Use a database (FOP)
+//   'dbName' -> $connection | J($connection) -> J($connection) | F
+export const useDatabase = curry(async ($dbName, $connection) => {
+  if (isNonJustFm($connection)) return $connection
+  const dbName = extract($dbName)
+  return pipeAsync(
+    mapMethod('useDatabase', dbName),
+    addTaggedNoteIf(isFault, `Unable to use database ${dbName}`, here()),
+    propagate($connection),
+  )($connection)
+})
+
+// createCollection
+//   '$collectionName' -> {$connection} -> J({$connection}) | F
+export const createCollection = curry(async ($collectionName, $connection) => {
+  const collectionName = extract($collectionName)
+  if (isNonJustFm($connection)) return $connection
+  return pipeAsync(
+    mapMethod('collection', collectionName),
+    callMethod('create', []),
+    addTaggedNoteIf(isFault, `Unable to create collection ${collectionName}`, here()),
+  )($connection)
+})
+
+// createCollection (NJR)
+//   '$collectionName' -> {$connection} -> J({$connection}) | F
+export const createCollection2 = curry(async ($collectionName, $connection) =>
+  pipeAsync(
+    returnIf(isNonJustFm),
+    log,
+    mapMethod('collection', extract($collectionName)),
+    callMethod('create', []),
+    addTaggedNoteIf(isFault, `Unable to create collection ${extract($collectionName)}`, here()),
+    done
+  )($connection)
+)
+
+
+// insertDoc
+// {doc} -> {$collection} | J($collection) -> J(doc-with-key-and-id-added)
+export const insertDoc = curry(async (doc, $collection) => {
+  if (isNonJustFm($collection)) return $collection
+  return pipeAsync(
+    mapAsyncMethod('save', doc),
+    map(mergeLeft(doc)),
+    addTaggedNoteIf(isFault, `Unable to insert doc`, here()),
+  )($collection)
+})
+
+// getDocByIdOrKey
+export const getDocByIdOrKey = curry(async ($idOrKey, $collection) => {
+  if (isNonJustFm($collection)) return $collection
+  return pipeAsync(
+    mapAsyncMethod('document', extract($idOrKey)),
+    addTaggedNoteIf(isFault, `Unable to query doc with id or key of '${extract($idOrKey)}'`, here()),
+  )($collection)
+})
+
+// dropDatabase
+//   '$name' => {$connection} -> J({$connection}) | F
+export const dropDatabase = curry(async ($name, $connection) => {
+  if (isNonJustFm($connection)) return $connection
+  const name = extract($name)
+  return pipeAsync(
+    useDatabase('_system'),
+    mapAsyncMethod('dropDatabase', name),
+    addTaggedNoteIf(isFault, `Unable to drop database named '${name}'`, here()),
+    propagate($connection),
+  )($connection)
+})
 
 // export const aqlQuery1 = curry(async (query, $db) => {
 //   logFm($db)
@@ -108,15 +192,6 @@ const _checkServerConnection = async $connection =>
 
 // // TODO: dropDatabaseIfExists()
 
-// // Use a database
-// export const useDatabase = curry(async (name, $db) =>
-//   pipeAsync(
-//     mapMethod('useDatabase', name),
-//     setRootCauseIfFault(`Unable to use database named '${name}'`, here()),
-//     propagateOnJust($db),
-//   )($db)
-// )
-
 // // TODO: check for collection existance
 // // TODO: cache collection handles?  see fu2 backend
 
@@ -128,14 +203,6 @@ const _checkServerConnection = async $connection =>
 // //     // propagateOnJust($db),
 // //   )($db)
 
-// // create collection within provided $db
-// export const createCollection = curry(async (name, $db) =>
-//   pipeAsync(
-//     mapMethod('collection', name),
-//     mapAsyncMethodPT('create', null),
-//     setRootCauseIfFault(`Unable to get collection '${name}'`, here()),
-//   )($db)
-// )
 
 // // Returns handle to specified collection name.
 // // If collection does not exist, it is created

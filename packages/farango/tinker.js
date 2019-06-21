@@ -1,38 +1,46 @@
+import { prop } from 'ramda'
 import { Nothing } from '@fonads/core'
-import { pipeAsync, isNotFault,capture, switchTo, log, logFm, logWithMsg, logStatus, logMsg, logMsgIf, logMsgOnNonFault, logFmWithMsg, logValWithMsg, toStatus, ptAsycn } from '@fonads/core'
-import { openConnection, dropDatabase, aqlQuery, createDatabase, useDatabase, createCollection, insertDocIntoCollection } from './src/farango'
+import { pipeAsync, isNotFault,capture, switchTo, log, logFm, logWithMsg, logStatus, logMsg, logIf, logMsgIf, mapTo, call } from '@fonads/core'
+import { openConnection, dropDatabase, aqlQuery, createDatabase, createDatabase2, useDatabase, createCollection, getDocByIdOrKey, insertDoc } from './src/farango'
 // TODO: implement NothingToJust, and use nothing below
 
 const tinkerDoc = {
   name: 'tinker',
-  action: 'bro insert'
+  action: 'oioioi'
 }
 
-const db = Nothing() // TODO: convert to aServer
+const docKey = Nothing();
+const connection = Nothing()
+const collection = Nothing()
+
 pipeAsync(
-  logMsg('... opening server connection'),
+
+  logMsg('\n... opening server connection'),
   openConnection('local', 'root'),
-  logMsgIf(isNotFault, '... creating database'),
+  capture(connection),
+
+  logMsgIf(isNotFault, '\n... creating database'),
   createDatabase('dbtest'),
-  // capture(db), // if everything does PT, may not need to use capture here ... eventually make this work
 
-  // logMsgOnNonFault('... creating collection'),
-  // useDatabase('dbtest'),
-  // createCollection('testCol'),
-  // logMsgOnNonFault('... inserting document into collection'),
-  // insertDocIntoCollection(tinkerDoc),
-  // switchTo(db),
-  // logMsgOnNonFault('... querying doc'),
-  // aqlQuery('FOR d in testCol FILTER d.name == "tinker" return d'),
-  // logFm,
+  logMsgIf(isNotFault, '\n... creating collection'),
+  useDatabase('dbtest'),
+  createCollection('testCollection'),
+  capture(collection),
 
-  // // clean up
-  // logMsg('\n--- clean up ----------------------------------------------\n'),
-  // logMsg('... deleting database'),
-  // switchTo(db),
-  // useDatabase('_system'), // TODO: put this in dropDatabase Fn
-  // dropDatabase('dbtest'),
-  // toStatus, logFm,
-  logMsg('\nDONE\n'),
+  logMsgIf(isNotFault, '\n... inserting document into collection'),
+  insertDoc(tinkerDoc), logIf(isNotFault),
+  mapTo(prop('_key'), docKey),
+
+  logMsgIf(isNotFault, '\n... querying the doc that was just inserted'),
+  switchTo(collection),
+  getDocByIdOrKey(docKey), logIf(isNotFault),
+
+  logMsgIf(isNotFault, '\n... deleting database'),
+  switchTo(connection),
+  dropDatabase('dbtest'),
+
+  logMsg('\nDONE'),
   logStatus,
+
 )('pw')
+

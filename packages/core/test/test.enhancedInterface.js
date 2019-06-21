@@ -14,7 +14,7 @@ export default function runEnhancedInterfaceTests() {
     testCallAsycn()
     testCallMethod()
     testCallAsyncMethod()
-    // TODO:testInstantiate()
+    // TODO:testInstantiateClass()
   })
 }
 

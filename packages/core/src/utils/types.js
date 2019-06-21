@@ -3,7 +3,7 @@ import { isArray, isString, isFunction } from 'ramda-adjunct'
 
 // if input is an array return as it, otherwise return array with single element of input
 export const arrayify = input => isArray(input) ? input : [input]
-export const flatArrify = input => flatten(arrayify(input))
+export const flatArrayify = input => flatten(arrayify(input))
 
 // Given the predicate fxn `checkPred`, check that all elements of `array` pass
 // ([] -> (a->bool)) -> boolean
