@@ -1,10 +1,14 @@
+// Completely inert, does nothing at all
+// Primarily exists prevent erroneous notes from being added to fmToPassthrough
+
 import stringify from 'json-stringify-safe'
 
-export const Passthrough = fmToWPassthrough => {
+export const Passthrough = fmToPassthrough => {
   let passthrough = {
     _tag: '@@FMonad',
     _type: 'Passthrough',
-    _fmToWPassthrough: fmToWPassthrough, // typically a fonad to be passed through a pipeline
+    _fmToPassthrough: fmToPassthrough, // typically a fonad to be passed through a pipeline
+    _notes: [], // never set, Passthrough is completely inerts
   }
   passthrough._this = passthrough
 
@@ -14,8 +18,8 @@ export const Passthrough = fmToWPassthrough => {
   passthrough._ap = () => passthrough._this
 
   // extended monadic interface
-  passthrough._extract = () => passthrough._fmToWPassthrough
-  passthrough._inspect = () => `Passthrough(${stringify(passthrough._fmToWPassthrough, null, 2)})`
+  passthrough._extract = () => passthrough._fmToPassthrough
+  passthrough._inspect = () => `Passthrough(${stringify(passthrough._fmToPassthrough, null, 2)})`
   passthrough._statusMsg = () => 'Status::Passthrough'
   passthrough._appendNote = () => passthrough._this
   return passthrough

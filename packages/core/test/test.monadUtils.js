@@ -1,31 +1,22 @@
 import { expect } from 'chai'
 
-// import {
-//   Just,
-//   Ok,
-//   Fault,
-//   Nothing,
-//   isJust,
-//   isNothing,
-//   isFault,
-//   monadify,
-// } from '../src/fonads'
-
 import {
-  Just, Ok, Fault, Nothing, monadify,
+  Just, Ok, Fault, Nothing, Passthrough, monadify,
   isFm, isJust, isNotJust, isFault, isNotFault, isNothing, isNotNothing,
-  isOk, isNotOk, isValue, isNotValue, isStatus, isNotStatus,
+  isOk, isNotOk, isValue, isNotValue, isStatus, isNotStatus, isPassthrough, isNotPassthrough
 } from '../src/fonads'
 
 const testJust = Just('hanging out')
 const testOk = Ok()
 const testNothing = Nothing()
 const testFault = Fault()
+const testPassthrough = Passthrough(testJust)
 
 const ok = Ok()
 const nothing = Nothing()
 const fault = Fault('testing', 'fake msg')
 const justOne = Just(1)
+const passthrough = Passthrough(justOne)
 
 
 export default function runMonadUtilTests() {
@@ -58,6 +49,10 @@ export default function runMonadUtilTests() {
       expect(isNotNothing(nothing)).to.equal(false)
       expect(isNothing(fault)).to.equal(false)
 
+      expect(isPassthrough(passthrough)).to.equal(true)
+      expect(isNotPassthrough(passthrough)).to.equal(false)
+      expect(isPassthrough(justOne)).to.equal(false)
+
       expect(isValue(nothing)).to.equal(true)
       expect(isValue(justOne)).to.equal(true)
       expect(isValue(fault)).to.equal(true)
@@ -76,6 +71,7 @@ export default function runMonadUtilTests() {
       expect(monadify(testNothing)).to.equal(testNothing)
       expect(monadify(testFault)).to.equal(testFault)
       expect(monadify(testOk)).to.equal(testOk)
+      expect(monadify(testPassthrough)).to.equal(testPassthrough)
       expect(isJust(monadify('value'))).to.equal(true)
       expect(isNothing(monadify(undefined))).to.equal(true)
       expect(isNothing(monadify(null))).to.equal(true)

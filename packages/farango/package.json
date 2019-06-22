@@ -20,7 +20,7 @@
     "build": "yarn clean && yarn build:umd:min",
     "prepub": "yarn clean && yarn test && yarn build",
     "test": "mocha --require @babel/register",
-    "tinker": "babel-node test/tinker.js",
+    "tinker": "babel-node tinker.js",
     "watch:test": "onchange 'src/**/*.js' 'test/**/*.js' -- yarn test",
     "watch:build": "onchange 'src/**/*.js' -- yarn build:umd:min",
     "watch:tinker": "onchange 'src/**/*.js' 'test/**/*.js' -- yarn tinker"
