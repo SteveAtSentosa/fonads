@@ -14,7 +14,7 @@ const testPassthrough = Passthrough(testJust)
 
 const ok = Ok()
 const nothing = Nothing()
-const fault = Fault('testing', 'fake msg')
+const fault = Fault({op: 'testing', msg: 'fake msg'})
 const justOne = Just(1)
 const passthrough = Passthrough(justOne)
 

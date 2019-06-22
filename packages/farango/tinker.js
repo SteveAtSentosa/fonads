@@ -2,6 +2,7 @@ import { prop } from 'ramda'
 import { Nothing } from '@fonads/core'
 import { pipeAsync, isNotFault, capture, switchTo, logStatus, logMsg, logIf, logMsgIf, mapTo } from '@fonads/core'
 import { openConnection, dropDatabase, createDatabase, useDatabase, createCollection, getDocByIdOrKey, insertDoc } from './src/farango'
+import { log } from '@fonads/core'
 
 const tinkerDoc = {
   _key: 'dupio',

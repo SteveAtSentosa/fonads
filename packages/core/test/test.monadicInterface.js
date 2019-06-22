@@ -12,7 +12,7 @@ import { isJust, isFault, chain, map, addNote, getNotes, extract, done, isPassth
 const ok = Ok()
 const nothing = Nothing()
 const passthrough = Passthrough()
-const fault = Fault('testing', 'fake msg')
+const fault = Fault({op: 'testing', msg: 'fake msg'})
 const justOne = Just(1)
 
 const twice = v => 2*v

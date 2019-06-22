@@ -62,11 +62,15 @@ export const throwIfP = (predicate, value, msg) => {
   return value
 }
 
+export const stackStrToArr = stackStr =>
+  drop(1, stackStr.split('\n').map(s => s.trim()))
+
 // Return call stack as an array of strings
 export const callStack = (skip = 0) => {
   const stackStr = new Error().stack
-  const stackArr = stackStr.split('\n').map(s => s.trim())
-  // skip 'Error" entry, and entry for this call at the very least
-  return drop(skip + 2, stackArr)
+  // const stackArr = stackStr.split('\n').map(s => s.trim())
+  const stackArr = stackStrToArr(stackStr)
+  // skip this call at the very least
+  return drop(skip + 1, stackArr)
 }
 

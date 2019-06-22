@@ -2,7 +2,7 @@
 // * allow loggers to be passed in for logging?
 
 import { curry, propEq, complement, isNil, drop, pipe, keys } from 'ramda'
-import { isObject, isFunction, isNotFunction, isNotObject } from 'ramda-adjunct'
+import { isObject, isFunction, isNotFunction, isNotObject, isArray } from 'ramda-adjunct'
 import stringify from 'json-stringify-safe'
 import { flatArrayify } from './utils/types'
 import { isError, here, hereStr } from './utils/error'
@@ -73,7 +73,7 @@ export const chain = curry(($fn, $fm) => {
   try {
     return isFm($fm) ? $fm._chain(fn) : fn($fm)
   } catch (e) {
-    return Fault(op, 'Exception thrown by chain function', e)
+    return Fault({op, msg: 'Exception thrown by chain function', e})
   }
 })
 
@@ -89,7 +89,7 @@ export const map = curry(($fn, $fm) => {
   try {
     return isFm($fm) ? $fm._map(fn) : Just(fn($fm))
   } catch (e) {
-    return Fault(op, 'Exception thrown by map function', e)
+    return Fault({op, msg: 'Exception thrown by map function', e})
   }
 })
 
@@ -121,10 +121,12 @@ export const extract = $fm => {
 export const x = extract
 
 // return a status message
-export const statusMsg = fm => (isFm(fm) ? fm._statusMsg() : `WARNING: can't get status for non-fm: ${stringify(fm)}`)
+export const statusMsg = fm =>
+  (isFm(fm) ? fm._statusMsg() : `WARNING: can't get status for non-fm: ${stringify(fm)}`)
 
 // return a resonable string representation of a monad
-export const inspect = fm => (isFm(fm) ? fm._inspect() : `WARNING: cant inspect non-monad: ${fm}`)
+export const inspect = fm =>
+  (isFm(fm) ? fm._inspect() : `WARNING: cant inspect non-monad: ${fm}`)
 
 // Add note to FM
 export const addNote = curry(($note, $fm) => {
@@ -132,6 +134,40 @@ export const addNote = curry(($note, $fm) => {
   fm._appendNote(extract($note))
   return fm
 })
+
+// TODO: doc & test
+export const addNoteIf = curry(($condOrPred, $note, $fm) =>
+  (_check($condOrPred, $fm) ? addNote(extract($note), $fm) : $fm))
+
+// TODO: doc & test
+export const addTaggedNote = curry(($note, $here, $fm) =>
+  addNote(`${$note}${hereStr(extract($here))}`, $fm))
+
+// addTaggedNoteIf
+// TODO: doc
+export const addTaggedNoteIf = curry(($condOrPred, $note, $here, $fm) =>
+  _check($condOrPred, $fm) ? addNote(`${extract($note)}${hereStr(extract($here))}`, $fm) : Just($fm),
+)
+
+// TODO: doc & test
+export const addClientErrMsg = curry(($msg, $fm) => {
+  if (isFault($fm)) $fm._clientMsg = extract($msg)
+  return $fm
+})
+
+// TODO: doc & test
+export const addClientErrMsgIf = curry(($condOrPred, $msg, $fm) =>
+  (_check($condOrPred, $fm) ? addClientErrMsg($msg, $fm) : $fm))
+
+// TODO: doc & test
+// refectlivy add error message to Fault
+export const addErrCode = curry(($code, $fm) => {
+  if (isFault($fm)) $fm._code = extract($code)
+  return $fm
+})
+
+export const addErrCodeIf = curry(($condOrPred, $code, $fm) =>
+  (_check($condOrPred, $fm) ? addErrCode($code, $fm) : $fm))
 
 //*****************************************************************************
 // Extended Monadic Interface
@@ -149,7 +185,7 @@ export const mapAsync = curry(async ($asycnFn, $fm) => {
   try {
     return Just(await asycnFn(extract($fm)))
   } catch (e) {
-    return Fault(op, 'Exception thrown by async fn', e)
+    return Fault({op, msg: 'Exception thrown by async fn', e})
   }
 })
 
@@ -190,27 +226,44 @@ export const mapAsyncMethod = curry(async ($method, $args, $fm) => {
   try {
     return Just(await o[method](...flatArrayify(args)))
   } catch (e) {
-    return Fault(op, `Exception thrown by async map method '${method}'`, e)
+    return Fault({op, msg: `Exception thrown by async map method '${method}'`, e})
   }
 })
 
+// TODO: test list of calls
 // call (NRJ, FOP)
 //   Similar to map, but acting as a fault or passthrough conduit
 //   If isFm($fm) where $fm(v), calls fn(v), return $fm on success
 //   If isNotFm($fm), calls fn($fm), return Just($fm) on success
 //   If fn() returns a F or thorw and exception, a Fault is returned
-//   () -> J[a] | a -> $fm | F
-export const call = curry(($fn, $fm) => {
+//   () | [ () ]-> J[a] | a -> $fm | F
+export const call = curry(($fnOrFnList, $fm) => {
   if (isNonJustFm($fm)) return $fm
+  return _call($fnOrFnList, $fm)
+})
+
+export const callOnFault = curry(($fnOrFnList, fault) => {
+  if (isNotFault(fault)) return fault
+  return _call($fnOrFnList, fault)
+})
+
+// type checking free
+export const _call = curry(($fnOrFnList, $fm) => {
+  if (isArray($fnOrFnList)) {
+    const fnList = _extractList($fnOrFnList)
+    fnList.forEach( fn => _call(fn, $fm))
+    return $fm
+  }
   const op = 'call()'
-  const fn = extract($fn)
+  const fn = extract($fnOrFnList)
   try {
-    const res = fn(extract($fm))
+    const res = fn(isJust($fm) ? extract($fm) : $fm)
     return isFault(res) ? res : Just($fm)
   } catch (e) {
-    return Fault(op, 'Exception thrown by function', e)
+    return Fault({op, msg: 'Exception thrown by function', e})
   }
 })
+
 
 // callAsycn (NRJ, FOP)
 //   Similar to mapAsync, but acting as a fault or passthrough conduit
@@ -247,7 +300,7 @@ export const callMethod = curry(($method, $args, $fm) => {
     const res = o[method](...flatArrayify(args))
     return isFault(res) ? res : Just($fm)
   } catch (e) {
-    return Fault(op, `Exception thrown by method '${method}'`, e)
+    return Fault({op, msg: `Exception thrown by method '${method}'`, e})
   }
 })
 
@@ -298,21 +351,9 @@ export const instantiateClass = curry(($className, $Class, $args) => {
   try {
     return Just(new Class(...args))
   } catch (e) {
-    return Fault(op, `Exception thrown during constrcution of class ${className}`, e)
+    return Fault({op, msg: `Exception thrown during constrcution of class ${className}`, e})
   }
 })
-
-// addTaggedNote
-// TODO: doc
-export const addTaggedNote = curry(($note, $here, $fm) => addNote(`${extract($note)}${hereStr(extract($here))}`, $fm))
-
-// addTaggedNoteIf
-// TODO: doc
-export const addTaggedNoteIf = curry(($condOrPred, $note, $here, $fm) =>
-  _check($condOrPred, $fm) ? addNote(`${extract($note)}${hereStr(extract($here))}`, $fm) : Just($fm),
-)
-// TODO: doc
-export const addNoteIf = curry(($condOrPred, $note, $fm) => (_check($condOrPred, $fm) ? addNote(extract($note), $fm) : Just($fm)))
 
 // Returns { shouldReturn: bool, toReturn: a }
 // Note that op/method/args are raw (i.e. not monadic)
@@ -320,8 +361,8 @@ const _checkMapMethodArgs = (op, method, args, $fm) => {
   const r = (shouldReturn, toReturn) => ({ shouldReturn, toReturn })
   if (isNonJustFm($fm)) return r(true, $fm)
   const o = extract($fm)
-  if (isNotObject(o)) return r(true, Fault(op, `Non object supplied: ${$fm}`))
-  if (isNotFunction(o[method])) return r(true, Fault(op, `Method '${method}' does not exist on object: ${stringify(o)}`))
+  if (isNotObject(o)) return r(true, Fault({op, msg: `Non object supplied: ${$fm}`}))
+  if (isNotFunction(o[method])) return r(true, Fault({op, msg: `Method '${method}' does not exist on object: ${stringify(o)}`}))
   return r(false, 'args are good')
 }
 
@@ -364,8 +405,6 @@ export const caseOf = (predActionList, $fm) => {
 export const orElse = () => true
 
 export const passthroughIf = curry((condOrPred, $fm) => (_check(condOrPred, $fm) ? Passthrough($fm) : Just($fm)))
-
-export const done = $fm => (isPassthrough($fm) ? $fm._fmToPassthrough : $fm)
 
 //*****************************************************************************
 // Operate on monadic data
@@ -432,7 +471,7 @@ export const logStatus = fm => {
 // Monadic helpers
 //*****************************************************************************
 
-export const monadify = a => (isFm(a) ? a : isNil(a) ? Nothing() : isError(a) ? Fault('', '', a) : Just(a))
+export const monadify = a => (isFm(a) ? a : isNil(a) ? Nothing() : isError(a) ? Fault({ e:a }) : Just(a))
 
 // propagate (NJR)
 //   TODO: docs
@@ -464,6 +503,20 @@ export const capture = curry((captureHere, $fm) => {
 })
 
 export const getNotes = fm => (isFm(fm) ? fm._notes : [])
+
+
+export const done = $fm => (isPassthrough($fm) ? $fm._fmToPassthrough : $fm)
+
+
+// TODO: TODO: TODO: really really really important to test this thouroughly
+// making passthroughs a bit easier
+// TODO: figure out how to make this work by adding done to fn list and calling pipeAsync
+// always calls done at the end of a pipeline
+// export const pipeAsyncFm = (...funcs) => x => pipeAsync([...funcs])(x)
+export const applyAsync = (acc,val) => acc.then(val);
+export const pipeAsyncFm = (...funcs) => x => [...funcs, done].reduce(applyAsync, Promise.resolve(x));
+
+
 
 export { Just, Nothing, Ok, Fault, Passthrough }
 export { pipeAsync, composeAsync, reflect, here }
