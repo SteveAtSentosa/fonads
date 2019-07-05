@@ -1,14 +1,21 @@
-import { append } from 'ramda'
-import { msgListToString, tab } from './utils/string'
+// TODO:
+// For all map functiuons, return nothing when the result isNil
+
+import { isString } from 'ramda-adjunct'
+import { msgListToStr, codeInfoOrStr, tab } from './utils/string'
 import { callStack, stackStrToArr } from './utils/error'
+import { insertNote, setNotes } from './utils/monadUtils'
 
 export const Fault = (options = {}) => {
-  const { op = '', code = '', msg = '', clientMsg = '', e = null } = options
+  // if options is a string, assume it the error msg
+  const {
+    op = '', code = '', msg = '', clientMsg = '', notes = [], e = null, here
+  } =  isString(options) ? { msg: options } : options
   let fault = {
     _tag: '@@FMonad',
     _type: 'Fault',
-    _notes: [],
-    _msg: `${op}: ${msg}`,
+    _notes: notes,
+    _msg: codeInfoOrStr({ op, msg, here }),
     _code: code,
     _clientMsg: clientMsg,
     _e: e,
@@ -24,11 +31,11 @@ export const Fault = (options = {}) => {
   // extended monadic interface
   fault._extract = () => false
   fault._inspect = () => `Fault(${fault._code || fault._msg})`
-  fault._statusMsg = () => statusString(fault)
-  fault._appendNote = note => {
-    fault._notes = append(note, fault._notes)
-    return fault._this
-  }
+  fault._statusMsg = () => _statusString(fault)
+  fault._setNotes = notes => setNotes(notes, fault)
+  fault._appendNote = note => insertNote('append', note, fault)
+  fault._prependNote = note => insertNote('prepend', note, fault)
+
   return fault
 }
 
@@ -36,7 +43,7 @@ export const Fault = (options = {}) => {
 // Helpers
 //*****************************************************************************
 
-function statusString(fault) {
+const _statusString = fault => {
   const e = fault._e
   let toReport = [`\nERROR encountered!`]
   if (fault._msg) toReport.push(tab(`Msg: ${fault._msg}`))
@@ -44,21 +51,24 @@ function statusString(fault) {
   if (fault._code) toReport.push(tab(`Code: ${fault._code}`))
   if (fault._notes.length > 0) {
     toReport.push('Notes:')
-    toReport.push(msgListToString(tab(fault._notes)))
+    toReport.push(msgListToStr(tab(fault._notes)))
   }
   if (e) {
     toReport.push('Exception Caught')
     if (e.name) toReport.push(tab(`Name: ${e.name}`))
     if (e.message) toReport.push(tab(`Message: ${e.message}`))
     if (e.code) toReport.push(tab(`Exception Code: ${e.code}`))
+    if (e.errorNum) toReport.push(tab(`Error Num: ${e.errorNum}`))
     if (e.stack) {
       toReport.push('Exception callstack:')
       const stackList = stackStrToArr(e.stack)
-      toReport.push(msgListToString(tab(stackList)))
+      toReport.push(msgListToStr(tab(stackList)))
     }
   }
   toReport.push('App Call Stack:')
-  toReport.push(msgListToString(tab(fault._callStack)))
-  return msgListToString(toReport)
+  toReport.push(msgListToStr(tab(fault._callStack)))
+  return msgListToStr(toReport)
 }
+
 export default Fault
+

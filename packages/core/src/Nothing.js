@@ -1,11 +1,21 @@
-import { append } from 'ramda'
-import { msgAndNotes } from './utils/string'
+import { msgAndNotes, str } from './utils/string'
+import { isEmptyOrNil } from './utils/types'
+import { insertNote, setNotes } from './utils/monadUtils'
+import Fault from './Fault'
 
-export const Nothing = () => {
+// TODO add opts, similar to Just, so nates can be added upon creation
+export const Nothing = (emptyOrNilVal=null) => {
+
+  // may not be pure for one fonad type to know about another, but is pragmatic in this case
+  if (!isEmptyOrNil(emptyOrNilVal))
+    return Fault({ op: 'Creating Nothing', msg: `non empty value supplied: ${str(emptyOrNilVal)}` })
+
   let nothing = {
     _tag: '@@FMonad',
     _type: 'Nothing',
     _notes: [],
+    _emptyOrNilVal: // undefined | null | [] | {}
+      isEmptyOrNil(emptyOrNilVal) ? emptyOrNilVal : 'non'
   }
   nothing._this = nothing
 
@@ -18,10 +28,9 @@ export const Nothing = () => {
   nothing._extract = () => null
   nothing._inspect =  () => 'Nothing'
   nothing._statusMsg = () => msgAndNotes('Status::Nothing', nothing._notes)
-  nothing._appendNote = note => {
-    nothing._notes = append(note, nothing._notes)
-    return nothing._this
-  }
+  nothing._setNotes = notes => setNotes(notes, nothing)
+  nothing._appendNote = note => insertNote('append', note, nothing)
+  nothing._prependNote = note => insertNote('prepend', note, nothing)
   return nothing
 }
 

@@ -8,6 +8,8 @@ import Just from '../src/Just'
 import Passthrough from '../src/Passthrough'
 import { isJust, isFault, chain, map, addNote, getNotes, extract, done, isPassthrough, passthroughIf } from '../src/fonads'
 
+import { double ,triple ,quad } from './testHelpers'
+
 
 const ok = Ok()
 const nothing = Nothing()
@@ -15,18 +17,14 @@ const passthrough = Passthrough()
 const fault = Fault({op: 'testing', msg: 'fake msg'})
 const justOne = Just(1)
 
-const twice = v => 2*v
-const triple = v => 3*v
-const quad = v => 4*v
-
 export default function runMonadicInterfaceTests() {
   describe('fonad interface tests', () => {
 
     it('should chain correctly', () => {
-      expect(chain(twice, justOne)).to.equal(2)
-      expect(chain(twice, 1)).to.equal(2)
-      expect(chain(twice, Just(chain(twice, justOne)))).to.equal(4)
-      expect(chain(twice, Just(chain(twice, 1)))).to.equal(4)
+      expect(chain(double, justOne)).to.equal(2)
+      expect(chain(double, 1)).to.equal(2)
+      expect(chain(double, Just(chain(double, justOne)))).to.equal(4)
+      expect(chain(double, Just(chain(double, 1)))).to.equal(4)
       expect(chain(noop, ok)).to.equal(ok)
       expect(chain(noop, fault)).to.equal(fault)
       expect(chain(noop, nothing)).to.equal(nothing)
@@ -69,7 +67,7 @@ export default function runMonadicInterfaceTests() {
       expect(getNotes(addNote('should not save',testPassthrough))).to.deep.equal([])
       addNote('f1', testFault)
       addNote('f2', testFault)
-      expect(getNotes(testFault)).to.deep.equal([ 'f1', 'f2' ])
+      expect(getNotes(testFault)).to.deep.equal([ 'f2', 'f1' ])
     })
 
     it('should extract values correctly', () => {
@@ -81,15 +79,20 @@ export default function runMonadicInterfaceTests() {
       expect(extract(Ok())).to.equal(true)
       expect(extract(Fault())).to.equal(false)
       expect(extract(Nothing())).to.equal(null)
-      expect(extract(testPassthrough)).to.equal(justOne)
-      expect(extract(extract(testPassthrough))).to.equal(1)
+      expect(extract(Nothing(null))).to.equal(null)
+      expect(extract(Nothing([]))).to.deep.equal([])
+      expect(extract(Nothing({}))).to.deep.equal({})
+      expect(isFault(Nothing({a:'b'}))).to.equal(true)
       expect(extract()).to.equal(undefined)
       expect(extract(null)).to.equal(null)
+      expect(extract(testPassthrough)).to.equal(justOne)
+      expect(extract(extract(testPassthrough))).to.equal(1)
     })
-    it('should handle passthroughs correctly', () => {
+
+    it('should handle passthroughs correctly', async () => {
       const cleanPassthrough = Passthrough(justOne)
       const passthroughAfterOps = pipe(
-        map(twice),
+        map(double),
         chain(triple),
         addNote('nothing to see here')
       )(cleanPassthrough)
@@ -104,12 +107,10 @@ export default function runMonadicInterfaceTests() {
       expect(done(fault)).to.equal(fault)
       expect(done(nothing)).to.equal(nothing)
       expect(done(1)).to.equal(1)
-      expect(isPassthrough(passthroughIf(isFault, justOne))).to.equal(false)
-      expect(isPassthrough(passthroughIf(isFault, fault))).to.equal(true)
-      expect(passthroughIf(isFault, fault)).to.not.equal(fault)
-      expect(extract(passthroughIf(isFault, fault))).to.equal(fault)
-
-
+      expect(isPassthrough(await passthroughIf(isFault, justOne))).to.equal(false)
+      expect(isPassthrough(await passthroughIf(isFault, fault))).to.equal(true)
+      expect(await passthroughIf(isFault, fault)).to.not.equal(fault)
+      expect(extract(await passthroughIf(isFault, fault))).to.equal(fault)
     })
   })
 }

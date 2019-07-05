@@ -171,7 +171,7 @@ Talk about returning promise, handling exceptoins, etc
 ### Working with monads that contain a class instantiation
 
 TBD
-talk about mapMethod, mapMethodAsycn (and chain, and ap)
+talk about mapMethod, mapMethodasync (and chain, and ap)
 
 
 ### Currying

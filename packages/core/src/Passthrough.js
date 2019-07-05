@@ -22,6 +22,9 @@ export const Passthrough = fmToPassthrough => {
   passthrough._inspect = () => `Passthrough(${stringify(passthrough._fmToPassthrough, null, 2)})`
   passthrough._statusMsg = () => 'Status::Passthrough'
   passthrough._appendNote = () => passthrough._this
+  passthrough._prependNote = () => passthrough._this
+  passthrough._setNotes = () => passthrough._this
+
   return passthrough
 }
 

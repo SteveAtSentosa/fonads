@@ -1,6 +1,7 @@
-import { append } from 'ramda'
 import stringify from 'json-stringify-safe'
 import { msgAndNotes } from './utils/string'
+import { insertNote, setNotes } from './utils/monadUtils'
+
 
 export const Just = val => {
   // if val is already an FM return it as is (don't double wrap a monad)
@@ -22,10 +23,9 @@ export const Just = val => {
   just._extract = () => just._val
   just._inspect = () => `Just(${stringify(just._val, null, 2)})`
   just._statusMsg = () => msgAndNotes('Status::Just', just._notes)
-  just._appendNote = note => {
-    just._notes = append(note, just._notes)
-    return just._this
-  }
+  just._setNotes = notes => setNotes(notes, just)
+  just._appendNote = note => insertNote('append', note, just)
+  just._prependNote = note => insertNote('prepend', note, just)
   return just
 }
 

@@ -1,5 +1,6 @@
 import { msgAndNotes } from './utils/string'
-import { append } from 'ramda'
+import { insertNote, setNotes } from './utils/monadUtils'
+
 
 export const Ok = (operation, message) => {
   let ok = {
@@ -19,10 +20,9 @@ export const Ok = (operation, message) => {
   ok._extract = () => true
   ok._inspect = () => `Ok(${ok._msg})`
   ok._statusMsg = () => msgAndNotes(`Status::Ok ${ok._msg}`, ok._notes)
-  ok._appendNote = note => {
-    ok._notes = append(note, ok._notes)
-    return ok._this
-  }
+  ok._setNotes = notes => setNotes(notes, ok)
+  ok._appendNote = note => insertNote('append', note, ok)
+  ok._prependNote = note => insertNote('prepend', note, ok)
   return ok
 }
 

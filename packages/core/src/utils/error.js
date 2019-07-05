@@ -1,6 +1,7 @@
 import { last, drop } from 'ramda'
+import { isString } from 'ramda-adjunct'
 import { arrayify } from './types'
-import { msgListToString, tab } from './string'
+import { msgListToStr, tab } from './string'
 
 // return line number of the module where this is callsed
 export const lineNum = () => new Error().stack.split('\n')[2]
@@ -28,11 +29,6 @@ export const raisedHereStr = () => {
   return `File: ${raisedInfo.file}, Function: ${raisedInfo.function}, line ${raisedInfo.lineNum}`
 }
 
-const isHere = here => here && here.file && here.line && here.fn && here.stack
-
-export const hereStr = here => isHere(here) ?
-` at ${here.file} | line ${here.line} | ${here.fn}()` /* + msgListToString(tab(here.stack), '\n') */ : ''
-
 export const isError = e => e instanceof Error
 
 // Given a error message or list of error messages ('' | ['']), and an optional
@@ -42,7 +38,7 @@ export const errString = (msgOrMsgList, e = null) => {
   if (e && e.name) msgList.push(`Error Name: ${e.name}`)
   if (e && e.message) msgList.push(`Error Messages: ${e.message}`)
   if (e && e.code) msgList.push(`Error Code: ${e.code}`)
-  return msgListToString([
+  return msgListToStr([
     '\nERROR encountered:',
     ...tab(msgList),
     `Call Stack:\n    ${new Error().stack}`,
@@ -73,4 +69,3 @@ export const callStack = (skip = 0) => {
   // skip this call at the very least
   return drop(skip + 1, stackArr)
 }
-
