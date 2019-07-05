@@ -1,5 +1,5 @@
 import { expect } from 'chai'
-import { isPromise } from 'ramda-adjunct'
+import { isPromise, isTruthy } from 'ramda-adjunct'
 import { reflect } from '../src/utils/fn'
 
 import { Ok, Just, Fault, Nothing, isJust, isFault } from '../src/fonads'
@@ -101,19 +101,19 @@ const testFonadicPromisify = () => {
     const resolvedPromise = asyncResolve('resolved')
     expect(isPromise(resolvedPromise)).to.equal(true)
     const resolved = await fPromisify(resolvedPromise)
-    expect(isJust(resolved)).to.equal(true)
+    expect(isJust(resolved)).to.satisfy(isTruthy)
     expect(extract(resolved)).to.equal('resolved')
 
     const rejectedPromise = asyncReject()
     expect(isPromise(rejectedPromise)).to.equal(true)
     const rejected = await fPromisify(rejectedPromise)
-    expect(isFault(rejected)).to.equal(true)
+    expect(isFault(rejected)).to.satisfy(isTruthy)
     expect(exceptionMsg(rejected)).to.equal('rejected')
 
     const thrownPromise = asyncThrow()
     expect(isPromise(thrownPromise)).to.equal(true)
     const thrown = await fPromisify(thrownPromise)
-    expect(isFault(thrown)).to.equal(true)
+    expect(isFault(thrown)).to.satisfy(isTruthy)
     expect(exceptionMsg(thrown)).to.equal('thrown')
   })
 }
@@ -123,26 +123,26 @@ const testMapAsync = () => {
     // monadic inputs
 
     const resolved = await map(asyncResolve, testJust)
-    expect(isJust(resolved)).to.equal(true)
+    expect(isJust(resolved)).to.satisfy(isTruthy)
     expect(extract(resolved)).to.equal(99)
 
     const rejected = await map(asyncReject, testJust)
-    expect(isFault(rejected)).to.equal(true)
+    expect(isFault(rejected)).to.satisfy(isTruthy)
 
     const thrown = await map(asyncThrow, testJust)
-    expect(isFault(thrown)).to.equal(true)
+    expect(isFault(thrown)).to.satisfy(isTruthy)
 
     // raw inputs
 
     const resolved2 = await map(asyncResolve, 88)
-    expect(isJust(resolved2)).to.equal(true)
+    expect(isJust(resolved2)).to.satisfy(isTruthy)
     expect(extract(resolved2)).to.equal(88)
 
     const rejected2 = await map(asyncReject, 88)
-    expect(isFault(rejected2)).to.equal(true)
+    expect(isFault(rejected2)).to.satisfy(isTruthy)
 
     const thrown2 = await map(asyncThrow, 88)
-    expect(isFault(thrown2)).to.equal(true)
+    expect(isFault(thrown2)).to.satisfy(isTruthy)
 
     // currying
 
@@ -152,11 +152,11 @@ const testMapAsync = () => {
 
     const curriedRejector = map(asyncReject)
     const rejected3 = await curriedRejector(null)
-    expect(isFault(rejected3)).to.equal(true)
+    expect(isFault(rejected3)).to.satisfy(isTruthy)
 
     const curriedThrower = map(asyncThrow)
     const thrown3 = await curriedThrower([])
-    expect(isFault(thrown3)).to.equal(true)
+    expect(isFault(thrown3)).to.satisfy(isTruthy)
 
     // non just reflectivity
 
@@ -175,12 +175,12 @@ const testMapMethod = () => {
   it('should map methods correctly', () => {
     const rawAdd = new Add()
     const r1 = mapMethod('three', [1, 2, 3], rawAdd)
-    expect(isJust(r1)).to.equal(true)
+    expect(isJust(r1)).to.satisfy(isTruthy)
     expect(extract(r1)).to.equal(6)
 
     const justAdd = Just(rawAdd)
     const r2 = mapMethod('three', [4, 5, 6], justAdd)
-    expect(isJust(r2)).to.equal(true)
+    expect(isJust(r2)).to.satisfy(isTruthy)
     expect(extract(r2)).to.equal(15)
 
     expect(extract(mapMethod('reflect', ['me'], { reflect }))).to.equal('me')
@@ -192,13 +192,13 @@ const testMapMethod = () => {
     expect(mapMethod('three', [1, 2, 3], testFault)).to.equal(testFault)
 
     // check error conditions
-    expect(isFault(mapMethod('three', [1, 2, 3], {}))).to.equal(true)
-    expect(isFault(mapMethod('three', [1, 2, 3], 'non-object'))).to.equal(true)
-    expect(isFault(mapMethod('nomethod', [], justAdd))).to.equal(true)
-    expect(isFault(mapMethod('nomethod', [], rawAdd))).to.equal(true)
-    expect(isFault(mapMethod('nonFn', [], { nonFn: [] }))).to.equal(true)
-    expect(isFault(mapMethod('nonFn', [], { nonFn: {} }))).to.equal(true)
-    expect(isFault(mapMethod('throw', [], justAdd))).to.equal(true)
+    expect(isFault(mapMethod('three', [1, 2, 3], {}))).to.satisfy(isTruthy)
+    expect(isFault(mapMethod('three', [1, 2, 3], 'non-object'))).to.satisfy(isTruthy)
+    expect(isFault(mapMethod('nomethod', [], justAdd))).to.satisfy(isTruthy)
+    expect(isFault(mapMethod('nomethod', [], rawAdd))).to.satisfy(isTruthy)
+    expect(isFault(mapMethod('nonFn', [], { nonFn: [] }))).to.satisfy(isTruthy)
+    expect(isFault(mapMethod('nonFn', [], { nonFn: {} }))).to.satisfy(isTruthy)
+    expect(isFault(mapMethod('throw', [], justAdd))).to.satisfy(isTruthy)
     expect(mapMethod('fault', [], justAdd)).to.equal(testFault)
   })
 }
@@ -209,22 +209,22 @@ const testMapAsyncMethod = () => {
     const justAsync = Just(rawAsync)
 
     const resolved1 = await mapMethod('resolve', ['I am resolved'], rawAsync)
-    expect(isJust(resolved1)).to.equal(true)
+    expect(isJust(resolved1)).to.satisfy(isTruthy)
     expect(extract(resolved1)).to.equal('I am resolved')
 
     const resolved2 = await mapMethod('resolve', 'I am resolved too', justAsync)
-    expect(isJust(resolved2)).to.equal(true)
+    expect(isJust(resolved2)).to.satisfy(isTruthy)
     expect(extract(resolved2)).to.equal('I am resolved too')
 
     const rejected1 = await mapMethod('reject', ['I am rejected'], rawAsync)
-    expect(isFault(rejected1)).to.equal(true)
+    expect(isFault(rejected1)).to.satisfy(isTruthy)
     const rejected2 = await mapMethod('reject', ['I am rejected too'], justAsync)
-    expect(isFault(rejected2)).to.equal(true)
+    expect(isFault(rejected2)).to.satisfy(isTruthy)
 
     const thrown1 = await mapMethod('throw', ['I was thrown'], rawAsync)
-    expect(isFault(thrown1)).to.equal(true)
+    expect(isFault(thrown1)).to.satisfy(isTruthy)
     const thrown2 = await mapMethod('throw', ['I was thrown too'], justAsync)
-    expect(isFault(thrown2)).to.equal(true)
+    expect(isFault(thrown2)).to.satisfy(isTruthy)
 
     const fault1 = await mapMethod('fault', ['My fault'], rawAsync)
     expect(fault1).to.equal(testFault)
@@ -234,16 +234,16 @@ const testMapAsyncMethod = () => {
     // test currying
     const mapGoBetween = mapMethod('resolve', ['I am fully resolved'])
     const curryResult = await mapGoBetween(justAsync)
-    expect(isJust(curryResult)).to.equal(true)
+    expect(isJust(curryResult)).to.satisfy(isTruthy)
     expect(extract(curryResult)).to.equal('I am fully resolved')
 
     // check error conditions
-    expect(isFault(await mapMethod('resolve', [1, 2, 3], {}))).to.equal(true)
-    expect(isFault(await mapMethod('resolve', [1, 2, 3], 'non-object'))).to.equal(true)
-    expect(isFault(await mapMethod('nomethod', [], rawAsync))).to.equal(true)
-    expect(isFault(await mapMethod('nomethod', [], justAsync))).to.equal(true)
-    expect(isFault(await mapMethod('nonFn', [], { nonFn: [] }))).to.equal(true)
-    expect(isFault(await mapMethod('nonFn', [], { nonFn: {} }))).to.equal(true)
+    expect(isFault(await mapMethod('resolve', [1, 2, 3], {}))).to.satisfy(isTruthy)
+    expect(isFault(await mapMethod('resolve', [1, 2, 3], 'non-object'))).to.satisfy(isTruthy)
+    expect(isFault(await mapMethod('nomethod', [], rawAsync))).to.satisfy(isTruthy)
+    expect(isFault(await mapMethod('nomethod', [], justAsync))).to.satisfy(isTruthy)
+    expect(isFault(await mapMethod('nonFn', [], { nonFn: [] }))).to.satisfy(isTruthy)
+    expect(isFault(await mapMethod('nonFn', [], { nonFn: {} }))).to.satisfy(isTruthy)
   })
 }
 
@@ -256,7 +256,7 @@ const testCall = () => {
 
     // test call returns Fault or throws
     expect(call(returnsFault, testJust)).to.equal(testFault)
-    expect(isFault(call(throws, testJust))).to.equal(true)
+    expect(isFault(call(throws, testJust))).to.satisfy(isTruthy)
 
     // test NJR
     expect(call(allGood, testFault)).to.equal(testFault)
@@ -271,13 +271,13 @@ const testCallasync = () => {
     expect(resolved).to.equal(testJust)
 
     const rejected = await callAsync(asyncReject, testJust)
-    expect(isFault(rejected)).to.equal(true)
+    expect(isFault(rejected)).to.satisfy(isTruthy)
 
     const thrown = await callAsync(asyncThrow, testJust)
-    expect(isFault(thrown)).to.equal(true)
+    expect(isFault(thrown)).to.satisfy(isTruthy)
 
     const fault = await callAsync(asyncFault, testJust)
-    expect(isFault(fault)).to.equal(true)
+    expect(isFault(fault)).to.satisfy(isTruthy)
 
     // raw inputs
 
@@ -286,13 +286,13 @@ const testCallasync = () => {
     expect(resolved2).to.equal('any val')
 
     const rejected2 = await callAsync(asyncReject, 'any val')
-    expect(isFault(rejected2)).to.equal(true)
+    expect(isFault(rejected2)).to.satisfy(isTruthy)
 
     const thrown2 = await callAsync(asyncThrow, 'any val')
-    expect(isFault(thrown2)).to.equal(true)
+    expect(isFault(thrown2)).to.satisfy(isTruthy)
 
     const fault2 = await callAsync(asyncFault, 'any val')
-    expect(isFault(fault2)).to.equal(true)
+    expect(isFault(fault2)).to.satisfy(isTruthy)
 
     // currying
 
@@ -302,11 +302,11 @@ const testCallasync = () => {
 
     const curriedRejector = callAsync(asyncReject)
     const rejected3 = await curriedRejector(null)
-    expect(isFault(rejected3)).to.equal(true)
+    expect(isFault(rejected3)).to.satisfy(isTruthy)
 
     const curriedThrower = callAsync(asyncThrow)
     const thrown3 = await curriedThrower([])
-    expect(isFault(thrown3)).to.equal(true)
+    expect(isFault(thrown3)).to.satisfy(isTruthy)
 
     // non just reflectivity
 
@@ -393,7 +393,7 @@ const testCallMethod = () => {
     expect(r1).to.equal(justAdd)
 
     const r2 = callMethod('three', [1, 2, 3], rawAdd)
-    expect(isJust(r2)).to.equal(true)
+    expect(isJust(r2)).to.satisfy(isTruthy)
     expect(extract(r2)).to.equal(rawAdd)
 
     expect(extract(callMethod('reflect', ['me'], { reflect }))).to.deep.equal({ reflect })
@@ -405,14 +405,14 @@ const testCallMethod = () => {
     expect(callMethod('three', [1, 2, 3], testFault)).to.equal(testFault)
 
     // check error conditions
-    expect(isFault(callMethod('three', [1, 2, 3], {}))).to.equal(true)
-    expect(isFault(callMethod('three', [1, 2, 3], 'non-object'))).to.equal(true)
-    expect(isFault(callMethod('nomethod', [], justAdd))).to.equal(true)
-    expect(isFault(callMethod('nomethod', [], rawAdd))).to.equal(true)
-    expect(isFault(callMethod('nonFn', [], { nonFn: [] }))).to.equal(true)
-    expect(isFault(callMethod('nonFn', [], { nonFn: {} }))).to.equal(true)
-    expect(isFault(callMethod('throw', [], justAdd))).to.equal(true)
-    expect(isFault(callMethod('fault', [], justAdd))).to.equal(true)
+    expect(isFault(callMethod('three', [1, 2, 3], {}))).to.satisfy(isTruthy)
+    expect(isFault(callMethod('three', [1, 2, 3], 'non-object'))).to.satisfy(isTruthy)
+    expect(isFault(callMethod('nomethod', [], justAdd))).to.satisfy(isTruthy)
+    expect(isFault(callMethod('nomethod', [], rawAdd))).to.satisfy(isTruthy)
+    expect(isFault(callMethod('nonFn', [], { nonFn: [] }))).to.satisfy(isTruthy)
+    expect(isFault(callMethod('nonFn', [], { nonFn: {} }))).to.satisfy(isTruthy)
+    expect(isFault(callMethod('throw', [], justAdd))).to.satisfy(isTruthy)
+    expect(isFault(callMethod('fault', [], justAdd))).to.satisfy(isTruthy)
   })
 }
 
@@ -422,39 +422,39 @@ const testCallAsyncMethod = () => {
     const justAsync = Just(rawAsync)
 
     const resolved1 = await callAsyncMethod('resolve', ['I am resolved'], rawAsync)
-    expect(isJust(resolved1)).to.equal(true)
+    expect(isJust(resolved1)).to.satisfy(isTruthy)
     expect(extract(resolved1)).to.equal(rawAsync)
 
     const resolved2 = await callAsyncMethod('resolve', 'I am resolved too', justAsync)
     expect(resolved2).to.equal(justAsync)
 
     const rejected1 = await callAsyncMethod('reject', ['I am rejected'], rawAsync)
-    expect(isFault(rejected1)).to.equal(true)
+    expect(isFault(rejected1)).to.satisfy(isTruthy)
     const rejected2 = await callAsyncMethod('reject', ['I am rejected too'], justAsync)
-    expect(isFault(rejected2)).to.equal(true)
+    expect(isFault(rejected2)).to.satisfy(isTruthy)
 
     const thrown1 = await callAsyncMethod('throw', ['I was thrown'], rawAsync)
-    expect(isFault(thrown1)).to.equal(true)
+    expect(isFault(thrown1)).to.satisfy(isTruthy)
     const thrown2 = await callAsyncMethod('throw', ['I was thrown too'], justAsync)
-    expect(isFault(thrown2)).to.equal(true)
+    expect(isFault(thrown2)).to.satisfy(isTruthy)
 
     const fault1 = await callAsyncMethod('fault', ['I was thrown'], rawAsync)
-    expect(isFault(fault1)).to.equal(true)
+    expect(isFault(fault1)).to.satisfy(isTruthy)
     const fault2 = await callAsyncMethod('fault', ['I was thrown too'], justAsync)
-    expect(isFault(fault2)).to.equal(true)
+    expect(isFault(fault2)).to.satisfy(isTruthy)
 
     // test currying
     const curriedAsyncMethod = callAsyncMethod('resolve', ['I am fully resolved'])
     const curryResult = await curriedAsyncMethod(justAsync)
-    expect(isJust(curryResult)).to.equal(true)
+    expect(isJust(curryResult)).to.satisfy(isTruthy)
     expect(curryResult).to.equal(justAsync)
 
     // check error conditions
-    expect(isFault(await callAsyncMethod('resolve', [1, 2, 3], {}))).to.equal(true)
-    expect(isFault(await callAsyncMethod('resolve', [1, 2, 3], 'non-object'))).to.equal(true)
-    expect(isFault(await callAsyncMethod('nomethod', [], rawAsync))).to.equal(true)
-    expect(isFault(await callAsyncMethod('nomethod', [], justAsync))).to.equal(true)
-    expect(isFault(await callAsyncMethod('nonFn', [], { nonFn: [] }))).to.equal(true)
-    expect(isFault(await callAsyncMethod('nonFn', [], { nonFn: {} }))).to.equal(true)
+    expect(isFault(await callAsyncMethod('resolve', [1, 2, 3], {}))).to.satisfy(isTruthy)
+    expect(isFault(await callAsyncMethod('resolve', [1, 2, 3], 'non-object'))).to.satisfy(isTruthy)
+    expect(isFault(await callAsyncMethod('nomethod', [], rawAsync))).to.satisfy(isTruthy)
+    expect(isFault(await callAsyncMethod('nomethod', [], justAsync))).to.satisfy(isTruthy)
+    expect(isFault(await callAsyncMethod('nonFn', [], { nonFn: [] }))).to.satisfy(isTruthy)
+    expect(isFault(await callAsyncMethod('nonFn', [], { nonFn: {} }))).to.satisfy(isTruthy)
   })
 }

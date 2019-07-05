@@ -1,5 +1,5 @@
 import { expect } from 'chai'
-import { isPromise } from 'ramda-adjunct'
+import { isPromise, isTruthy } from 'ramda-adjunct'
 import {
   testJust, testOk, testNothing, testFault, testPassthrough,
   double, triple, square, quad, asyncDouble, asyncTriple, asyncQuad, asyncSquare, asyncResolve
@@ -26,74 +26,75 @@ export default function runMonadUtilTests() {
 
 const testFonadTypeDetection = () => {
   it('should detect fonad types correctly', () => {
-    expect(isFm(ok)).to.equal(true)
-    expect(isFm(fault)).to.equal(true)
-    expect(isFm(nothing)).to.equal(true)
-    expect(isFm(justOne)).to.equal(true)
+    expect(isFm(ok)).to.deep.equal(ok)
+    expect(isFm(fault)).to.deep.equal(fault)
+    expect(isFm(nothing)).to.deep.equal(nothing)
+    expect(isFm(justOne)).to.deep.equal(justOne)
     expect(isFm('ok')).to.equal(false)
     expect(isFm({})).to.equal(false)
 
-    expect(isOk(ok)).to.equal(true)
+    expect(isOk(ok)).to.deep.equal(ok)
     expect(isNotOk(ok)).to.equal(false)
     expect(isOk(justOne)).to.equal(false)
     expect(isOk('ok')).to.equal(false)
     expect(isOk({ ok })).to.equal(false)
     expect(isOk([])).to.equal(false)
 
-    expect(isJust(justOne)).to.equal(true)
+    expect(isJust(justOne)).to.equal(justOne)
     expect(isNotJust(justOne)).to.equal(false)
     expect(isJust(nothing)).to.equal(false)
 
-    expect(isFault(fault)).to.equal(true)
+    expect(isFault(fault)).to.equal(fault)
     expect(isNotFault(fault)).to.equal(false)
     expect(isFault(ok)).to.equal(false)
 
-    expect(isNothing(nothing)).to.equal(true)
+    expect(isNothing(nothing)).to.equal(nothing)
     expect(isNotNothing(nothing)).to.equal(false)
     expect(isNothing(fault)).to.equal(false)
 
-    expect(isPassthrough(passthrough)).to.equal(true)
+    expect(isPassthrough(passthrough)).to.equal(passthrough)
     expect(isNotPassthrough(passthrough)).to.equal(false)
     expect(isPassthrough(justOne)).to.equal(false)
 
-    expect(isValue(nothing)).to.equal(true)
-    expect(isValue(justOne)).to.equal(true)
-    expect(isValue(fault)).to.equal(true)
+    // not sure why I created isValue
+    expect(isValue(nothing)).to.equal(nothing)
+    expect(isValue(justOne)).to.equal(justOne)
+    expect(isValue(fault)).to.equal(fault)
     expect(isValue(ok)).to.equal(false)
     expect(isNotValue(justOne)).to.equal(false)
 
-    expect(isStatus(fault)).to.equal(true)
-    expect(isStatus(ok)).to.equal(true)
+    expect(isStatus(fault)).to.equal(fault)
+    expect(isStatus(ok)).to.equal(ok)
     expect(isStatus(nothing)).to.equal(false)
     expect(isStatus(justOne)).to.equal(false)
     expect(isNotStatus(ok)).to.equal(false)
 
-    expect(isEmptyOrNilJust(Just())).to.equal(true)
-    expect(isEmptyOrNilJust(Just(null))).to.equal(true)
-    expect(isEmptyOrNilJust(Just([]))).to.equal(true)
-    expect(isEmptyOrNilJust(Just({}))).to.equal(true)
+    expect(isEmptyOrNilJust(Just())).to.satisfy(isTruthy)
+    expect(isEmptyOrNilJust(Just(null))).to.satisfy(isTruthy)
+    expect(isEmptyOrNilJust(Just([]))).to.satisfy(isTruthy)
+    expect(isEmptyOrNilJust(Just({}))).to.satisfy(isTruthy)
     expect(isEmptyOrNilJust(Just([ 'hj' ]))).to.equal(false)
   })
 }
 
 const testFonadify = () => {
   it('should fonadify correctly', () => {
-    expect(isNothing(fonadify(Just()))).to.equal(true)
-    expect(isNothing(fonadify(Just(null)))).to.equal(true)
-    expect(isNothing(fonadify(Just([])))).to.equal(true)
-    expect(isNothing(fonadify(Just({})))).to.equal(true)
+    expect(isNothing(fonadify(Just()))).to.satisfy(isTruthy)
+    expect(isNothing(fonadify(Just(null)))).to.satisfy(isTruthy)
+    expect(isNothing(fonadify(Just([])))).to.satisfy(isTruthy)
+    expect(isNothing(fonadify(Just({})))).to.satisfy(isTruthy)
     expect(isNothing(fonadify(Just('not-empty')))).to.equal(false)
     expect(fonadify(testJust)).to.equal(testJust)
     expect(fonadify(testNothing)).to.equal(testNothing)
     expect(fonadify(testFault)).to.equal(testFault)
     expect(fonadify(testOk)).to.equal(testOk)
-    expect(isJust(fonadify('value'))).to.equal(true)
-    expect(isFault(fonadify(new Error('barf')))).to.equal(true)
-    expect(isNothing(fonadify(undefined))).to.equal(true)
-    expect(isNothing(fonadify(null))).to.equal(true)
-    expect(isNothing(fonadify())).to.equal(true)
-    expect(isNothing(fonadify([]))).to.equal(true)
-    expect(isNothing(fonadify({}))).to.equal(true)
+    expect(isJust(fonadify('value'))).to.satisfy(isTruthy)
+    expect(isFault(fonadify(new Error('barf')))).to.satisfy(isTruthy)
+    expect(isNothing(fonadify(undefined))).to.satisfy(isTruthy)
+    expect(isNothing(fonadify(null))).to.satisfy(isTruthy)
+    expect(isNothing(fonadify())).to.satisfy(isTruthy)
+    expect(isNothing(fonadify([]))).to.satisfy(isTruthy)
+    expect(isNothing(fonadify({}))).to.satisfy(isTruthy)
     expect(extract(fonadify({}))).to.deep.equal({})
     expect(extract(fonadify([]))).to.deep.equal([])
     expect(extract(fonadify())).to.equal(null)

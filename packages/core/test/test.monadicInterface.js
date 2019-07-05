@@ -1,5 +1,6 @@
 import  { expect } from 'chai'
 import { noop, pipe } from 'ramda'
+import { isTruthy } from 'ramda-adjunct'
 
 import Ok from '../src/Ok'
 import Fault from '../src/Fault'
@@ -32,11 +33,11 @@ export default function runMonadicInterfaceTests() {
     })
 
     it('should map correctly', () => {
-      expect(isJust(map(triple, justOne))).to.equal(true)
+      expect(isJust(map(triple, justOne))).to.satisfy(isTruthy)
       expect(map(triple, justOne)).property('_val', 3)
       expect(chain(triple, map(triple, justOne))).to.equal(9)
 
-      expect(isJust(map(quad, 2))).to.equal(true)
+      expect(isJust(map(quad, 2))).to.satisfy(isTruthy)
       expect(map(quad, 2)).property('_val', 8)
       expect(chain(triple, map(quad, 2))).to.equal(24)
 
@@ -49,9 +50,9 @@ export default function runMonadicInterfaceTests() {
     it('should convert exceptions to Fault', () => {
       const throwE = () => { throw new Error('test throw') }
       const chainFault = chain(throwE, justOne)
-      expect(isFault(chainFault)).to.equal(true)
+      expect(isFault(chainFault)).to.satisfy(isTruthy)
       const mapFault = map(throwE, justOne)
-      expect(isFault(mapFault)).to.equal(true)
+      expect(isFault(mapFault)).to.satisfy(isTruthy)
     })
 
     it('should append notes correctly', () => {
@@ -82,7 +83,7 @@ export default function runMonadicInterfaceTests() {
       expect(extract(Nothing(null))).to.equal(null)
       expect(extract(Nothing([]))).to.deep.equal([])
       expect(extract(Nothing({}))).to.deep.equal({})
-      expect(isFault(Nothing({a:'b'}))).to.equal(true)
+      expect(isFault(Nothing({a:'b'}))).to.satisfy(isTruthy)
       expect(extract()).to.equal(undefined)
       expect(extract(null)).to.equal(null)
       expect(extract(testPassthrough)).to.equal(justOne)
@@ -108,7 +109,7 @@ export default function runMonadicInterfaceTests() {
       expect(done(nothing)).to.equal(nothing)
       expect(done(1)).to.equal(1)
       expect(isPassthrough(await passthroughIf(isFault, justOne))).to.equal(false)
-      expect(isPassthrough(await passthroughIf(isFault, fault))).to.equal(true)
+      expect(isPassthrough(await passthroughIf(isFault, fault))).to.satisfy(isTruthy)
       expect(await passthroughIf(isFault, fault)).to.not.equal(fault)
       expect(extract(await passthroughIf(isFault, fault))).to.equal(fault)
     })

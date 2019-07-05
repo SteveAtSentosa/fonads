@@ -24,50 +24,59 @@ import Passthrough from './Passthrough'
 // Fonad type checkers
 //*****************************************************************************
 
-// TODO:
-// Very interesting experiment, return the actual monad upon true (i.e. returns a truthy value), otherwise return false
-// Could make for some very intresting short cuts like return isFault(val) || val*vall
+// In general when checking for a positivy type match, the fm being checked
+// will be returned on match (truthy), and false returned on no match
 
-// a -> bool
-export const isFm = $fm => isObject($fm) && propEq('_tag', '@@FMonad', $fm)
-export const isNotFm = complement(isFm)
+// if obj[propKey] === propVal then returns obj (truthy), otherwise boolean false
+const _propEqReflect = curry((propKey, propVal, obj) =>
+  isObject(obj) && propEq(propKey, propVal, obj) ? obj : false)
 
-// 'type' -> fm -> bool
-export const isType = curry((type, fm) => isFm(fm) && propEq('_type', type, fm))
+// a -> isFm ? fm (truthy) | false
+// export const isFm = toCheck =>
+//   isObject(toCheck) && propEq('_tag', '@@FMonad', toCheck) ? toCheck : false
+export const isFm = _propEqReflect('_tag', '@@FMonad')
+export const isNotFm = complement(isFm) // returns bool
+
+
+// 'type' -> fm -> typeMatch ? toCheck (truthy) | false
+export const isType = curry((type, toCheck) => _propEqReflect('_type', type, toCheck))
+export const isNotType = complement(isType) // returns bool
+//
+// fm -> truthy | false
+export const isJust = isType('Just') // returns the just on match, otherwise boolean false
+export const isNotJust = complement(isJust) // returns bool
+
+// fm -> truthy | false
+export const isFault = isType('Fault') // returns the fault on match, otherwise boolean false
+export const isNotFault = complement(isFault) // returns bool
+
+// fm -> truthy | false
+export const isNothing = isType('Nothing') // returns the nothing on match, otherwise boolean false
+export const isNotNothing = complement(isNothing) // returns bool
+
+// fm -> truthy | false
+export const isOk = isType('Ok') // returns the ok on match, otherwise boolean false
+export const isNotOk = complement(isOk) // returns bool
+
+// fm -> truthy | false
+export const isPassthrough = isType('Passthrough') // returns the passthrough on match, otherwise boolean false
+export const isNotPassthrough = complement(isPassthrough) // returns bool
+
+// fm -> truthy | false
+export const isValue = fm => isJust(fm) || isFault(fm) || isNothing(fm) // returns the fm on match, otherwise boolean false
+export const isNotValue = complement(isValue) // returns bool
 
 // fm -> bool
-export const isJust = isType('Just')
-export const isNotJust = complement(isJust)
+export const isStatus = fm => isOk(fm) || isFault(fm) // returns the fm on match, otherwise boolean false
+export const isNotStatus = complement(isStatus) // returns bool
 
-// fm -> bool
-export const isFault = isType('Fault')
-export const isNotFault = complement(isFault)
+// fm -> truthy | false
+// returns fm on match, otherwise returns false
+export const isNonJustFm = fm => isFm(fm) && isNotJust(fm) ? fm : false
 
-// fm -> bool
-export const isNothing = isType('Nothing')
-export const isNotNothing = complement(isNothing)
-
-// fm -> bool
-export const isOk = isType('Ok')
-export const isNotOk = complement(isOk)
-
-// fm -> bool
-export const isPassthrough = isType('Passthrough')
-export const isNotPassthrough = complement(isPassthrough)
-
-// fm -> bool
-export const isValue = fm => isJust(fm) || isFault(fm) || isNothing(fm)
-export const isNotValue = complement(isValue)
-
-// fm -> bool
-export const isStatus = fm => isOk(fm) || isFault(fm)
-export const isNotStatus = complement(isStatus)
-
-// fm -> bool
-// returns true if isFm(fm) && isNotJust(fm), otherwise returns false
-export const isNonJustFm = fm => isFm(fm) && isNotJust(fm)
-
-export const isEmptyOrNilJust = fm => isJust(fm) && isEmptyOrNil(fm._val)
+// fm -> truthy | false
+// returns fm on match, otherwise returns false
+export const isEmptyOrNilJust = fm => isJust(fm) && isEmptyOrNil(fm._val) ? fm : false
 
 //*****************************************************************************
 // Core interface
@@ -741,6 +750,9 @@ export const capture = curry((captureHere, $fm) => {
 export const getNotes = fm => (isFm(fm) ? fm._notes : [])
 
 
+
+
+
 // from https://github.com/jperasmus/pipe-then
 // var _pipe = function pipe() {
 //   for (var _len = arguments.length, functions = Array(_len), _key = 0; _key < _len; _key++) {
@@ -754,6 +766,9 @@ export const getNotes = fm => (isFm(fm) ? fm._notes : [])
 //   };
 // };
 
+
+// FMN Pipelines only allow Just() to enter the pipeline, reflects non-Just
+// Also unwraps Passthroughs at the end of the pipeline
 
 export const done = $fm => (isPassthrough($fm) ? $fm._fmToPassthrough : $fm)
 export const appendAddAsyncFn = (promiseChain, curFn) => promiseChain.then(curFn)
