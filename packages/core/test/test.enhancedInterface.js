@@ -3,11 +3,14 @@ import { isPromise, isTruthy } from 'ramda-adjunct'
 import { reflect } from '../src/utils/fn'
 
 import { Ok, Just, Fault, Nothing, isJust, isFault } from '../src/fonads'
-import { extract, map, mapMethod, call, fPromisify, exceptionMsg } from '../src/fonads'
-import { callAsync, callMethod, callAsyncMethod } from '../src/fonads'
+import { extract, map, mapMethod, fPromisify, addNote, getExceptionMsg, getNotes } from '../src/fonads'
+import { call, callMethod, callAsyncMethod } from '../src/fonads'
+
+
 
 import {
   testOk, testNothing, testFault, testJust, testRaw,
+  double, quad, asyncQuad, asyncTriple, asyncDouble, asyncAddNote,
   asyncResolve, asyncFault, asyncReject, asyncThrow, Add, Async, allGood, returnsFault, throws
 } from './testHelpers'
 
@@ -15,85 +18,18 @@ export default function runEnhancedInterfaceTests() {
   describe('enhanced monadic interface tests', () => {
     testFonadicPromisify()
     testMapAsync()
+    testMapAsyncFonadOperator()
     testMapMethod()
     testMapAsyncMethod()
     testCall()
     testCallasync()
+    testCallAsycnFonadOperator()
+    testCallFnLst()
     testCallMethod()
     testCallAsyncMethod()
-    testCallFnLst()
-    // TODO:testInstantiateClass()
+    testInstantiateClass() // NYI
   })
 }
-
-
-
-// const testOk = Ok()
-// const testNothing = Nothing()
-// const testFault = Fault()
-// const testJust = Just(99)
-// const testRaw = 'raw'
-
-
-// // todo, put these in a common testing util file
-// const asyncResolve = v =>
-//   new Promise((resolve, reject) =>
-//     setTimeout(() => {
-//       resolve(v)
-//     }, 10),
-//   )
-
-// const asyncFault = () => asyncResolve(testFault)
-
-// const asyncReject = a =>
-//   new Promise((resolve, reject) =>
-//     setTimeout(() => {
-//       reject(new Error('rejected'))
-//     }, 10),
-//   )
-
-// const timeout = () =>
-//   new Promise(resolve => {
-//     setTimeout(resolve, 10)
-//   })
-
-// const asyncThrow = async ms => {
-//   await timeout(ms)
-//   throw new Error('thrown')
-// }
-
-// class Add {
-//   three(v1, v2, v3) {
-//     return v1 + v2 + v3
-//   }
-//   throw() {
-//     throw new Error('barf')
-//   }
-//   fault() {
-//     return testFault
-//   }
-// }
-
-// class Async {
-//   resolve(msg) {
-//     return new Promise((resolve, reject) => setTimeout(() => resolve(msg), 10))
-//   }
-//   reject(msg) {
-//     return new Promise((resolve, reject) => setTimeout(() => reject(new Error(msg)), 10))
-//   }
-//   throw(msg) {
-//     throw new Error(msg)
-//   }
-//   fault() {
-//     return testFault
-//   }
-// }
-
-// const allGood = () => 'all good'
-// const returnsFault = () => testFault
-// const throws = () => {
-//   throw new Error('thrown')
-// }
 
 const testFonadicPromisify = () => {
   it('should wait correctly', async () => {
@@ -108,13 +44,13 @@ const testFonadicPromisify = () => {
     expect(isPromise(rejectedPromise)).to.equal(true)
     const rejected = await fPromisify(rejectedPromise)
     expect(isFault(rejected)).to.satisfy(isTruthy)
-    expect(exceptionMsg(rejected)).to.equal('rejected')
+    expect(getExceptionMsg(rejected)).to.equal('rejected')
 
     const thrownPromise = asyncThrow()
     expect(isPromise(thrownPromise)).to.equal(true)
     const thrown = await fPromisify(thrownPromise)
     expect(isFault(thrown)).to.satisfy(isTruthy)
-    expect(exceptionMsg(thrown)).to.equal('thrown')
+    expect(getExceptionMsg(thrown)).to.equal('thrown')
   })
 }
 
@@ -267,44 +203,48 @@ const testCall = () => {
 
 const testCallasync = () => {
   it('should FOP call async functions correctly', async () => {
-    const resolved = await callAsync(asyncResolve, testJust)
-    expect(resolved).to.equal(testJust)
+    const resolved = call(asyncResolve, testJust)
+    expect(isPromise(resolved)).to.equal(true)
+    expect(await resolved).to.equal(testJust)
 
-    const rejected = await callAsync(asyncReject, testJust)
-    expect(isFault(rejected)).to.satisfy(isTruthy)
+    const rejected = call(asyncReject, testJust)
+    expect(isPromise(rejected)).to.equal(true)
+    expect(isFault(await rejected)).to.satisfy(isTruthy)
 
-    const thrown = await callAsync(asyncThrow, testJust)
-    expect(isFault(thrown)).to.satisfy(isTruthy)
+    const thrown = call(asyncThrow, testJust)
+    expect(isPromise(thrown)).to.equal(true)
+    expect(isFault(await thrown)).to.satisfy(isTruthy)
 
-    const fault = await callAsync(asyncFault, testJust)
-    expect(isFault(fault)).to.satisfy(isTruthy)
+    const fault = call(asyncFault, testJust)
+    expect(isPromise(fault)).to.equal(true)
+    expect(isFault(await fault)).to.satisfy(isTruthy)
 
     // raw inputs
 
-    const resolved2 = await callAsync(asyncResolve, 'any val')
+    const resolved2 = await call(asyncResolve, 'any val')
     expect(isJust(resolved2)).to.equal(false) // no longer auto-fonadifying
     expect(resolved2).to.equal('any val')
 
-    const rejected2 = await callAsync(asyncReject, 'any val')
+    const rejected2 = await call(asyncReject, 'any val')
     expect(isFault(rejected2)).to.satisfy(isTruthy)
 
-    const thrown2 = await callAsync(asyncThrow, 'any val')
+    const thrown2 = await call(asyncThrow, 'any val')
     expect(isFault(thrown2)).to.satisfy(isTruthy)
 
-    const fault2 = await callAsync(asyncFault, 'any val')
+    const fault2 = await call(asyncFault, 'any val')
     expect(isFault(fault2)).to.satisfy(isTruthy)
 
     // currying
 
-    const curriedResolver = callAsync(asyncResolve)
+    const curriedResolver = call(asyncResolve)
     const resolved3 = await curriedResolver(testJust)
     expect(resolved3).to.equal(testJust)
 
-    const curriedRejector = callAsync(asyncReject)
+    const curriedRejector = call(asyncReject)
     const rejected3 = await curriedRejector(null)
     expect(isFault(rejected3)).to.satisfy(isTruthy)
 
-    const curriedThrower = callAsync(asyncThrow)
+    const curriedThrower = call(asyncThrow)
     const thrown3 = await curriedThrower([])
     expect(isFault(thrown3)).to.satisfy(isTruthy)
 
@@ -321,68 +261,136 @@ const testCallasync = () => {
   })
 }
 
-
-const testCallFnLst = () => {
-  it('should handle call of non-async fn lists correctly', () => {
-    const fnList = [ allGood, allGood, allGood ]
-    const res = call(fnList, testJust)
-    // console.log('res: ', res)
-
-    // const testJust = Just(99)
-    // const testRaw = 'raw'
-
-    // TODO: test faults returned
+const testMapAsyncFonadOperator = () => {
+  it('should map asycn fonad opertators correctly', async () => {
+    const just = Just('anything')
+    const res = map(asyncAddNote('asycn op note'), just)
+    expect(isPromise(res)).to.equal(true)
+    expect(await res).to.equal(just)
+    expect(getNotes(await res)).to.deep.equal(['asycn op note'])
   })
-
-  it('should handle total-async fn lists correctly', () => {
-
-    // const fnList = [ asyncResolve, asyncResolve, asyncResolve ]
-    // const res = call(fnList, testJust)
-
-
-    // const fnList = [ allGood, allGood2, allGood3 ]
-    // const resolved = await callAsync(asyncResolve, testJust)
-    // expect(resolved).to.equal(testJust)
-
-  })
-
-  // it('should handle mixed-async fn lists correctly', () => {
-  //   const fnList = [ allGood, asyncResolve, allGood ]
-  //   const res = call(fnList, testJust)
-
-  // })
-
-  // const rawAdd = new Add()
-  // const justAdd = Just(rawAdd)
-
-  // const r1 = callMethod('three', [4, 5, 6], justAdd)
-  // expect(r1).to.equal(justAdd)
-
-  // const r2 = callMethod('three', [1, 2, 3], rawAdd)
-  // expect(isJust(r2)).to.equal(true)
-  // expect(extract(r2)).to.equal(rawAdd)
-
-  // expect(extract(callMethod('reflect', ['me'], { reflect }))).to.deep.equal({ reflect })
-  // expect(extract(callMethod('reflect', 'me', { reflect }))).to.deep.equal({ reflect })
-
-  // // check NJR
-  // expect(callMethod('three', [1, 2, 3], testOk)).to.equal(testOk)
-  // expect(callMethod('three', [1, 2, 3], testNothing)).to.equal(testNothing)
-  // expect(callMethod('three', [1, 2, 3], testFault)).to.equal(testFault)
-
-  // // check error conditions
-  // expect(isFault(callMethod('three', [1, 2, 3], {}))).to.equal(true)
-  // expect(isFault(callMethod('three', [1, 2, 3], 'non-object'))).to.equal(true)
-  // expect(isFault(callMethod('nomethod', [], justAdd))).to.equal(true)
-  // expect(isFault(callMethod('nomethod', [], rawAdd))).to.equal(true)
-  // expect(isFault(callMethod('nonFn', [], { nonFn: [] }))).to.equal(true)
-  // expect(isFault(callMethod('nonFn', [], { nonFn: {} }))).to.equal(true)
-  // expect(isFault(callMethod('throw', [], justAdd))).to.equal(true)
-  // expect(isFault(callMethod('fault', [], justAdd))).to.equal(true)
-
 }
 
+const testCallAsycnFonadOperator = async () => {
+  it('should call asycn fonad opertators correctly', async () => {
+    const just = Just('another just')
+    const res = call(asyncAddNote('asycn op call note'), just)
+    expect(isPromise(res)).to.equal(true)
+    expect(await res).to.equal(just)
+    expect(getNotes(await res)).to.deep.equal(['asycn op call note'])
+  })
+}
 
+const testCallFnLst = () => {
+  it('should handle call of non-async fn lists correctly', async () => {
+
+    let just = Just(2)
+    let fnList = [ addNote('1'), double, addNote('2') ]
+    const faultFreeRes = call(fnList, just)
+    expect(isPromise(faultFreeRes)).to.equal(true)
+    expect(await faultFreeRes).to.equal(just)
+    expect(getNotes(just)).to.deep.equal(['2', '1'])
+    expect(extract(just)).to.equal(2)
+
+    // fault cases
+
+    just = Just(3)
+    fnList = [ addNote('1'), returnsFault, addNote('2'), allGood, quad ]
+    const faultRes = call(fnList, just)
+    expect(isPromise(faultRes)).to.equal(true)
+    expect(await faultRes).to.equal(testFault)
+    expect(extract(just)).to.equal(3)
+
+    fnList = [ allGood, allGood, allGood, throws ]
+    const thrownRes = call(fnList, testJust)
+    expect(isPromise(thrownRes)).to.equal(true)
+    expect(isFault(await thrownRes)).to.satisfy(isTruthy)
+    expect(getExceptionMsg(await thrownRes)).to.equal('thrown')
+  })
+
+  it('should handle total-async fn lists correctly', async () => {
+
+    let just = Just(4)
+    let fnList = [ asyncQuad, asyncAddNote('a-note'), asyncTriple, asyncAddNote('b-note'), asyncDouble ]
+    const faultFreeRes = call(fnList, just)
+    expect(isPromise(faultFreeRes)).to.equal(true)
+    expect(await faultFreeRes).to.equal(just)
+    expect(getNotes(just)).to.deep.equal(['b-note', 'a-note'])
+    expect(extract(just)).to.equal(4)
+
+    // fault cases
+
+    just = Just(5)
+    fnList = [ asyncFault, asyncResolve, asyncResolve ]
+    const faultRes = call(fnList, just)
+    expect(isPromise(faultRes)).to.equal(true)
+    expect(isFault(await faultRes)).to.equal(testFault)
+    expect(extract(just)).to.equal(5)
+
+    just = Just(6)
+    fnList = [ asyncResolve, asyncResolve, asyncThrow ]
+    const thrownRes = call(fnList, just)
+    expect(isPromise(thrownRes)).to.equal(true)
+    expect(isFault(await faultRes)).to.satisfy(isTruthy)
+    expect(getExceptionMsg(await thrownRes)).to.equal('thrown')
+    expect(extract(just)).to.equal(6)
+
+    just = Just(7)
+    fnList = [ asyncResolve, asyncReject, asyncResolve ]
+    const rejectedRes = call(fnList, just)
+    expect(isPromise(rejectedRes)).to.equal(true)
+    expect(isFault(await rejectedRes)).to.satisfy(isTruthy)
+    expect(getExceptionMsg(await rejectedRes)).to.equal('rejected')
+    expect(extract(just)).to.equal(7)
+  })
+
+  it('should handle mixed-async fn lists correctly', async () => {
+    let just = Just(44)
+    let fnList = [ addNote('partner'), () => asyncResolve(88), addNote('howdy'), double ]
+    const faultFree = call(fnList, just)
+    expect(isPromise(faultFree)).to.equal(true)
+    expect(await faultFree).to.equal(just)
+    expect(extract(just)).to.equal(44)
+
+    just = Just(55)
+    fnList = [ asyncFault, asyncResolve, asyncResolve ]
+    let faultRes = call(fnList, just)
+    expect(isPromise(faultRes)).to.equal(true)
+    expect(isFault(await faultRes)).to.equal(testFault)
+    expect(extract(just)).to.equal(55)
+
+    just = Just(555)
+    fnList = [ double, returnsFault, asyncResolve ]
+    faultRes = call(fnList, just)
+    expect(isPromise(faultRes)).to.equal(true)
+    expect(isFault(await faultRes)).to.equal(testFault)
+    expect(extract(just)).to.equal(555)
+
+    just = Just(66)
+    fnList = [ asyncResolve, asyncThrow, () => asyncResolve(44) ]
+    let thrownRes = call(fnList, just)
+    expect(isPromise(thrownRes)).to.equal(true)
+    expect(isFault(await faultRes)).to.satisfy(isTruthy)
+    expect(getExceptionMsg(await thrownRes)).to.equal('thrown')
+    expect(extract(just)).to.equal(66)
+
+    just = Just(666)
+    fnList = [ asyncResolve, asyncAddNote('a-note'), throws ]
+    thrownRes = call(fnList, just)
+    expect(isPromise(thrownRes)).to.equal(true)
+    expect(isFault(await faultRes)).to.satisfy(isTruthy)
+    expect(getExceptionMsg(await thrownRes)).to.equal('thrown')
+    expect(extract(just)).to.equal(666)
+
+    just = Just(77)
+    fnList = [ asyncResolve, allGood, asyncReject, asyncResolve ]
+    let rejectedRes = call(fnList, just)
+    expect(isPromise(rejectedRes)).to.equal(true)
+    expect(isFault(await rejectedRes)).to.satisfy(isTruthy)
+    expect(getExceptionMsg(await rejectedRes)).to.equal('rejected')
+    expect(extract(just)).to.equal(77)
+  })
+}
 
 const testCallMethod = () => {
   it('should FOP call methods correctly', () => {
@@ -458,3 +466,5 @@ const testCallAsyncMethod = () => {
     expect(isFault(await callAsyncMethod('nonFn', [], { nonFn: {} }))).to.satisfy(isTruthy)
   })
 }
+
+const testInstantiateClass = () => null

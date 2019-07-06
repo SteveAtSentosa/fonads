@@ -1,9 +1,9 @@
-import { Just, Ok, Fault, Nothing, Passthrough, isFault } from '../src/fonads'
-import { doesNotReject } from 'assert';
+import { Just, Ok, Fault, Nothing, Passthrough, fCurry } from '../src/fonads'
+import { addNote } from '../src/fonads'
 
 export const testOk = Ok()
 export const testNothing = Nothing()
-export const testFault = Fault()
+export const testFault = Fault({ msg: 'test fault' })
 export const testJust = Just(99)
 export const testRaw = 'raw'
 export const testPassthrough = Passthrough(testJust)
@@ -23,6 +23,7 @@ export const asyncDouble = v => asyncResolve(2*v)
 export const asyncTriple = v => asyncResolve(3*v)
 export const asyncQuad = v => asyncResolve(4*v)
 export const asyncSquare = v => asyncResolve(v*v)
+export const asyncAddNote = fCurry((note, fm) => asyncResolve(addNote(note, fm)))
 
 // respolved with v
 export const asyncResolve = v =>

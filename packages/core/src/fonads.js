@@ -1,14 +1,11 @@
 // TODO:
-// * Can I make map/mapasync, call/callasync, etc single function smart about type of incoming fn?
-//   - This would really be nice
 // * For Any function calling a supplied function (predCheck, callIf, caseOf, predlist, etc), handle async input fns
 // * Let caseOf recieve predOrHard list
-// * Move all monadic helper like fxns to monads themselves?
+// * update fns to accept fm wrapped in promise ???  Probably not since pipeline handles promises so well
 // * Add new notes/here stuff into viz
 
-import { curry, prop, propEq, complement, includes, drop, pipe, pipeP, keys, all, any } from 'ramda'
+import { curry, prop, propEq, complement, includes, drop, pipe, keys, all, any, find } from 'ramda'
 import { isObject, isFunction, isNotFunction, isNotObject, isArray, isTruthy, isPromise } from 'ramda-adjunct'
-// import stringify from 'json-stringify-safe'
 import { flatArrayify, isEmptyOrNil } from './utils/types'
 import { isError, here, throwIf } from './utils/error'
 import { codeInfoOrStr, str, json } from './utils/string'
@@ -36,7 +33,6 @@ const _propEqReflect = curry((propKey, propVal, obj) =>
 //   isObject(toCheck) && propEq('_tag', '@@FMonad', toCheck) ? toCheck : false
 export const isFm = _propEqReflect('_tag', '@@FMonad')
 export const isNotFm = complement(isFm) // returns bool
-
 
 // 'type' -> fm -> typeMatch ? toCheck (truthy) | false
 export const isType = curry((type, toCheck) => _propEqReflect('_type', type, toCheck))
@@ -82,7 +78,6 @@ export const isEmptyOrNilJust = fm => isJust(fm) && isEmptyOrNil(fm._val) ? fm :
 // Core interface
 //*****************************************************************************
 
-
 // map [ sync | async, NJR ]
 //   Return result of calling $fn($fm) wrapped in a Just
 //   If an exception is thrown as a result of calling fn, a Fault is returned
@@ -92,10 +87,12 @@ export const map = curry(($fn, $fm) => {
   if (isNonJustFm($fm)) return $fm
   const op = 'map()'
   const msg = 'Exception thrown by map function'
-  const fn = extract($fn); const val = extract($fm)
+  const fn = extract($fn)
+  const fonadOperation = isFm($fm) && fn.isFonadOperator
+  const val = fonadOperation ? $fm : extract($fm)
   try {
     const $res = fn(val)
-    const res = extract($res)
+    const res = fonadOperation ? $res : extract($res)
     return (
       isPromise(res) ? fPromisify(res, { op, msg }) :
       isPromise($res) ? fPromisify($res, { op, msg }) :
@@ -104,13 +101,6 @@ export const map = curry(($fn, $fm) => {
     return Fault({ op, msg, e })
   }
 })
-
-// const res = fn(val)
-// if (isPromise(extract(res))) {
-//   return fPromisifyReflect(res, $fm, { op, msg })
-// }
-// return isFault(res) ? res : $fm
-
 
 // mapMethod [ sync | async, NJR ]
 //   Map over a class method for cases when a, of Just(a) is an instantiateClassd class
@@ -135,74 +125,12 @@ export const mapMethod = curry(($method, $args, $fm) => {
   }
 })
 
-
-
-export const fPromisifyReflect = async ($promise, toReflect, $opts = {}) => {
-  const res = await fPromisify($promise, $opts)
-  return isFault(res) ? res : toReflect
-}
-
-
-// map ref
-// try {
-//   const $res = fn(val)
-//   const res = extract($res)
-//   return (
-//     isPromise(res) ? fPromisify(res, { op, msg }) :
-//     isPromise($res) ? fPromisify($res, { op, msg }) :
-//     fonadify($res))
-// } catch (e) {
-//   return Fault({ op, msg, e })
-// }
-// })
-
-// TODO: move this down when done
-// TODO: can I just call map, but passthrough on non fault
-// TODO: can I merge this with map, with some sort of option  RE what to return
-// type checking free
-export const _call = curry(($fnOrFnList, $fm) => {
-  if (isArray($fnOrFnList)) {
-    const fnList = _extractList($fnOrFnList)
-    const returnedList = fnList.map(fn => _call(fn, $fm))
-    // console.log('returnedList: ', returnedList)
-    const promiseReturned = any(isPromise, returnedList)
-    console.log('promiseReturned: ', promiseReturned)
-    return $fm
-  }
-  const op = 'call()'
-  const msg = 'Exception thrown by call function'
-  const fn = extract($fnOrFnList); const val = extract($fm)
-  try {
-    const $res = fn(val)
-    const res = extract($res)
-    return (
-      isPromise($res) ? fPromisifyReflect($res, $fm, { op, msg }) :
-      isPromise(res) ? fPromisifyReflect(res, $fm, { op, msg }) :
-      isFault($res) ? $res :
-      $fm
-    )
-  } catch (e) {
-    return Fault({ op, msg, e })
-  }
-})
-
-// const op = 'call()'
-// const fn = extract($fnOrFnList)
-// try {
-//   const res = fn(isJust($fm) ? extract($fm) : $fm)
-//   return isFault(res) ? res : Just($fm)
-// } catch (e) {
-//   return Fault({ op, msg: 'Exception thrown by function', e })
-// }
-// })
-
-
-
-// call (NRJ, FOP)
+// call [ sync | async, NJR ]
 //   Similar to map, but acting as a fault or passthrough conduit
-//   If isFm($fm) where $fm(v), calls fn(v), return $fm on success
-//   If isNotFm($fm), calls fn($fm), return Just($fm) on success
-//   If fn() returns a F or thorw and exception, a Fault is returned
+//   Calls all funtions sequentially supplying $fm as the arg
+//   Returns Promise($fm) if none of the fns throw/reject/return-fault, otherwise returns Promise(F)
+//   In the case of multiple fns, Promise($fm) a promise is always returned (in case any of fns asycn // TODO: this can change with smartPipe
+//   In the case of a single non-async fn, the output is the same as described above, but not wrapped in a promise
 //   () | [ () ]-> J[a] | a -> $fm | F
 export const call = curry(($fnOrFnList, $fm) => {
   if (isNonJustFm($fm)) return $fm
@@ -210,28 +138,8 @@ export const call = curry(($fnOrFnList, $fm) => {
 })
 
 export const pt = call;
-export const callAsync = call
 
-// callasync (NRJ, FOP)
-//   Similar to mapAsync, but acting as a passthrough conduit
-//   If isFm($fm) where $fm(v), calls fn(v), return P($fm) on success
-//   If isNotFm($fm), calls fn($fm), return P(Just($fm)) on success
-//   If fn() returns a F or thorw and exception, a P(Fault) is returned
-//   async () -> J[a] | a -> P($fm | F)
-// export const callAsync = curry(async ($asyncFn, $fm) => {
-//   if (isNonJustFm($fm)) return $fm
-//   const op = 'callAsync()'
-//   const asyncFn = extract($asyncFn)
-//   try {
-//     const res = await asyncFn(extract($fm))
-//     return isFault(res) ? res : Just($fm)
-//   } catch (e) {
-//     return Fault({op, msg: 'Exception thrown by async fn', e})
-//   }
-// })
-
-export const pta = callAsync;
-export const ptasync = call;
+// --------------------------------- the line ---------------------------------
 
 // callMethod (FOP, NJR)
 //   Similar to mapMethod, but acting as a fault passthrough conduit
@@ -275,11 +183,67 @@ export const callAsyncMethod = curry(async ($method, $args, $fm) => {
   }
 })
 
+// TODO: make chain handle async fns correctly
+// chain
+//   Can accept either a monad, or a raw value to be chained thorugh `fn`
+//   If isFm($fm) where $fm(v), returns result of calling fn(v)
+//   If isNotFm($fm), returns result of calling fn($fm)
+//   If an exception is thrown as a result of calling fn, a Fault is returned
+//   (a->b) -> J[a] | a -> b | F
+export const chain = curry(($fn, $fm) => {
+  const op = 'chain()'
+  const fn = extract($fn)
+  try {
+    return isFm($fm) ? $fm._chain(fn) : fn($fm)
+  } catch (e) {
+    return Fault({ op, msg: 'Exception thrown by chain function', e })
+  }
+})
+
+// core interface helpers
+
+// Returns { shouldReturn: bool, toReturn: a }
+// Note that op/method/args are raw (i.e. not monadic)
+const _checkExecuteMethodArgs = (op, method, args, $fm) => {
+  const r = (shouldReturn, toReturn) => ({ shouldReturn, toReturn })
+  if (isNonJustFm($fm)) return r(true, $fm)
+  const o = extract($fm)
+  if (isNotObject(o)) return r(true, Fault({ op, msg: `Non object supplied: ${$fm}` }))
+  if (isNotFunction(o[method])) return r(true, Fault({ op, msg: `Method '${method}' does not exist on object: ${str(o)}` }))
+  return r(false, 'args are good')
+}
+
+// type checking free
+export const _call = curry(($fnOrFnList, $fm) => {
+  if (isArray($fnOrFnList)) return _callFnListAync($fnOrFnList, $fm)
+  const res = map($fnOrFnList, $fm)
+  return isPromise(res) ?
+    res.then(resolvedRes => Promise.resolve(isFault(resolvedRes) || $fm)) :
+    isFault(res) || $fm
+})
+
+export const _callFnListAync = async ($fnList, $fm) => {
+  let fault = null
+  const callList = _extractList($fnList).map(async fn => {
+    const res = await call(fn, $fm)
+    !fault && isFault(res) && (fault = res)
+  })
+  await Promise.all(callList)
+  return fault || $fm
+}
 
 
 //*****************************************************************************
 // Core Utilities
 //*****************************************************************************
+
+// TODO: doc & test
+export const mapTo = curry(($fn, fmMapToHere, $fm) => {
+  const fn = extract($fn)
+  const res = fn(extract($fm))
+  fonadify(convertToJust(res, fmMapToHere))
+  return $fm
+})
 
 // fPromisify
 //   Turn a promise into a fonadic promise (i.e. a promise that contains a fonad)
@@ -293,6 +257,11 @@ export const fPromisify = async ($promise, $opts = {}) => {
   } catch (e) {
     return Fault({ op, msg, e })
   }
+}
+
+export const fPromisifyReflect = async ($promise, toReflect, $opts = {}) => {
+  const res = await fPromisify($promise, $opts)
+  return isFault(res) ? res : toReflect
 }
 
 // extract
@@ -313,169 +282,60 @@ export const extract = $fm => {
   return $fm
 }
 
-// ---------------------------------- above the line
+// adds 'isFonadOperator' to final and all partially curriend functions
+// TODO:
+//   make 'tag' as an optional input to fCurry, so that anybody can use it
+//   implmenet placeholders
+export function fCurry(fn) {
+  var args = [].slice.call(arguments)
+  var typeOfFn = typeof fn
 
-
-
-// TODO: make chain handle async fns correctly
-//
-// chain
-//   Can accept either a monad, or a raw value to be chained thorugh `fn`
-//   If isFm($fm) where $fm(v), returns result of calling fn(v)
-//   If isNotFm($fm), returns result of calling fn($fm)
-//   If an exception is thrown as a result of calling fn, a Fault is returned
-//   (a->b) -> J[a] | a -> b | F
-export const chain = curry(($fn, $fm) => {
-  const op = 'chain()'
-  const fn = extract($fn)
-  try {
-    return isFm($fm) ? $fm._chain(fn) : fn($fm)
-  } catch (e) {
-    return Fault({ op, msg: 'Exception thrown by chain function', e })
+  if (typeOfFn !== 'function' ) throw new Error('auto-curry: Invalid parameter. Expected function, received ' + typeOfFn)
+  if (fn.length <= 1) {
+    fn.isFonadOperator = true
+    return fn
   }
+  if (args.length - 1 >= fn.length) {
+    const fnToReturn = fn.apply(this, args.slice(1))
+    fnToReturn.isFonadOperator = true
+    return fnToReturn
+  }
+  const fnToReturn = function() {
+    return fCurry.apply(this, args.concat([].slice.call(arguments)))
+  };
+  fnToReturn.isFonadOperator = true
+  return fnToReturn
+};
+
+export const fonadify = $a =>
+  isEmptyOrNilJust($a) ? Nothing($a._val) :
+  isFm($a) ? $a :
+  isEmptyOrNil($a) ? Nothing($a) :
+  isError($a) ? Fault({ e: $a }) :
+  Just($a)
+
+export const propagate = curry(($toPropagate, fm) =>
+  (isJust(fm) || isNotFm(fm) ? Just($toPropagate) : fm))
+
+export const switchTo = propagate
+
+// if isFm(fm), convert it to a Just with the given vaue
+// This does not generate a new fm, it converts the existing fm
+export const convertToJust = curry((valForJust, fmToConvert) => {
+  if (isNotFm(fmToConvert)) return fmToConvert
+  const tempJust = Just(valForJust)
+  // TODO: for the sake of staying functional, could use pipe instead of chaining
+  keys(fmToConvert)
+    .filter(k => k !== '_this' && k !== '_notes')
+    .forEach(k => delete fmToConvert[k])
+  keys(tempJust)
+    .filter(k => k !== '_this' && k !== '_notes')
+    .forEach(k => (fmToConvert[k] = tempJust[k]))
+  return fmToConvert
 })
 
-
-// map a function over a list of $fm's
-// TODO: test the crap out of this
-// TODO: is there a different way to do this (like map(R.map) kind of thing?)
-// very experimental
-export const mapOver = curry(($fn, $fmList) => {
-  const list = _extractList($fmList)
-  const fn = extract($fn)
-  // TODO: if any of the results in the list are a fault, return fauult instead???
-  return Just(list.map($fm => map(fn, $fm)))
-})
-
-// TODO: doc & test
-export const mapTo = curry(($fn, fmMapToHere, $fm) => {
-  const fn = extract($fn)
-  const res = fn(extract($fm))
-  fonadify(convertToJust(res, fmMapToHere))
-  return $fm
-})
-
-
-// return a status message
-export const statusMsg = fm => (isFm(fm) ? fm._statusMsg() : `WARNING: can't get status for non-fm: ${json(fm)}`)
-
-// return exception message if Fault with exception, otherwise ''
-export const exceptionMsg = fault =>
-  isFault(fault) && fault._e && fault._e.message ? fault._e.message : ''
-
-// return a resonable string representation of a monad
-export const inspect = fm => (isFm(fm) ? fm._inspect() : `WARNING: cant inspect non-monad: ${fm}`)
-
-// Add note to FM
-// note = 'msg' or { op, msg, code, here }
-export const addNote = curry(($note, $fm) => {
-  const fm = isFm($fm) ? $fm : Just($fm)
-  const fullNote = codeInfoOrStr(extract($note))
-  fm._prependNote(extract(fullNote))
-  return fm
-})
-
-// TODO: doc & test
-export const addNoteIf = curry(async ($condOrPred, $note, $fm) =>
-  (await _check($condOrPred, $fm) ? addNote(extract($note), $fm) : $fm))
-
-// TODO: doc & test
-export const addClientErrMsg = curry(($msg, $fm) => {
-  if (isFault($fm)) $fm._clientMsg = extract($msg)
-  return $fm
-})
-
-// TODO: doc & test
-export const addClientErrMsgIf = curry(async ($condOrPred, $msg, $fm) =>
-  (await _check($condOrPred, $fm) ? addClientErrMsg($msg, $fm) : $fm))
-
-// TODO: doc & test
-// refectlivy add error message to Fault
-export const addErrCode = curry(($code, $fm) => {
-  if (isFault($fm)) $fm._code = extract($code)
-  return $fm
-})
-
-export const addErrCodeIf = curry(async ($condOrPred, $code, $fm) =>
-  (await _check($condOrPred, $fm) ? addErrCode($code, $fm) : $fm))
-
-//*****************************************************************************
-// Extended Monadic Interface
-//*****************************************************************************
-
-// mapAsyncOld (NJR)
-//   map an async function over a fonad, returning the result in a promise
-//   If asyncFn rejects of throws an exception, a representative Fault is returned
-//   if isFm(a) and isNotJust(a), reflects fm
-//   async(a->b) -> Just(a) | a -> P(Just(b)| Fault)
-// export const mapAsyncDeprecate = curry(async ($asyncFn, $fm) => {
-//   if (isNonJustFm($fm)) return $fm
-//   const op = 'mapAsync()'
-//   const asyncFn = extract($asyncFn)
-//   try {
-//     return fonadify(await asyncFn(extract($fm)))
-//   } catch (e) {
-//     return Fault({ op, msg: 'Exception thrown by async fn', e })
-//   }
-// })
-
-// export const mapAsyncMethod = curry(async ($method, $args, $fm) => {
-//   const op = 'mapAsyncMethod()'
-//   const args = _extractList($args)
-//   const method = extract($method)
-//   const { shouldReturn, toReturn } = _checkExecuteMethodArgs(op, method, args, $fm)
-//   if (shouldReturn) return toReturn
-//   const o = extract($fm)
-//   try {
-//     return Just(await o[method](...flatArrayify(args)))
-//   } catch (e) {
-//     return Fault({op, msg: `Exception thrown by async map method '${method}'`, e})
-//   }
-// })
-
-
-// mapAsyncMethod (NJR)
-//   map an an async class method over a fonad, returning the result in a promise
-//   if isJust($fm), for fm[a] calls a.method() and returns a promisified Just(result)
-//   if isNotFm(fm), calls fm.method() and and returns a promisified Just(result)
-//   If `method` rejects of throws an exception, a representative Fault is returned
-//   'fn-name' -> [ arg1, arg2, ...] | singleArg -> J[a] | a -> P(J[b] | F)
-// export const mapAsyncMethodDeprecated = curry(async ($method, $args, $fm) => {
-//   const op = 'mapAsyncMethod()'
-//   const args = _extractList($args)
-//   const method = extract($method)
-//   const { shouldReturn, toReturn } = _checkExecuteMethodArgs(op, method, args, $fm)
-//   if (shouldReturn) return toReturn
-//   const o = extract($fm)
-//   try {
-//     // return Just(await o[method](...flatArrayify(args)))
-//     return fonadify(await o[method](...flatArrayify(args)))
-//   } catch (e) {
-//     return Fault({ op, msg: `Exception thrown by async map method '${method}'`, e })
-//   }
-// })
-
-
-export const callIf = curry(async ($condOrPred, $fnOrFnList, $fm) => {
-  if (isNonJustFm($fm)) return $fm
-  if (await _check($condOrPred, $fm)) return call($fnOrFnList, $fm)
-  return $fm
-})
-
-
-export const callOnFault = curry(($fnOrFnList, fault) => {
-  if (isNotFault(fault)) return fault
-  return _call($fnOrFnList, fault)
-})
-
-
-// callMethodIf (FOP | NJR)
-//   TODO: doc & test
-//  ifIsFunc(condOrPred) calls method if condOrPred($fm) is true
-//  ifIsNotFunc(condnOrPred) calls method if condnOrPred itself is true
-export const callMethodIf = curry(async ($condOrPred, $method, $args, $fm) => {
-  if (isNonJustFm($fm)) return $fm
-  if (await _check($condOrPred, $fm)) return callMethod($method, $args, $fm)
+export const capture = curry((captureHere, $fm) => {
+  convertToJust(extract($fm), captureHere)
   return $fm
 })
 
@@ -499,24 +359,133 @@ export const instantiateClass = curry(($className, $Class, $args) => {
   }
 })
 
+const _extractList = $list => flatArrayify(extract($list)).map($v => extract($v))
 
+// ---------------------------------- above the line
 
 // export const defer = con => fn => fn(con)
+// TODO: is this useful (kindof a functionify??)
 export const defer = fn => con => fn(con)
 
+// map a function over a list of $fm's
+// TODO: test the crap out of this
+// TODO: is there a different way to do this (like map(R.map) kind of thing?)
+// very experimental
+export const mapOver = curry(($fn, $fmList) => {
+  const list = _extractList($fmList)
+  const fn = extract($fn)
+  // TODO: if any of the results in the list are a fault, return fauult instead???
+  return Just(list.map($fm => map(fn, $fm)))
+})
 
-// Returns { shouldReturn: bool, toReturn: a }
-// Note that op/method/args are raw (i.e. not monadic)
-const _checkExecuteMethodArgs = (op, method, args, $fm) => {
-  const r = (shouldReturn, toReturn) => ({ shouldReturn, toReturn })
-  if (isNonJustFm($fm)) return r(true, $fm)
-  const o = extract($fm)
-  if (isNotObject(o)) return r(true, Fault({ op, msg: `Non object supplied: ${$fm}` }))
-  if (isNotFunction(o[method])) return r(true, Fault({ op, msg: `Method '${method}' does not exist on object: ${str(o)}` }))
-  return r(false, 'args are good')
+//*****************************************************************************
+// Pipeline functions
+//*****************************************************************************
+
+// TODO: get smartpipe to work
+// from https://github.com/jperasmus/pipe-then
+// var _pipe = function pipe() {
+//   for (var _len = arguments.length, functions = Array(_len), _key = 0; _key < _len; _key++) {
+//     functions[_key] = arguments[_key];Xw
+//   }
+
+//   return function(input) {
+//     return functions.reduce(function(chain, func) {
+//       return chain.then(func);
+//     }, Promise.resolve(input));
+//   };
+// };
+
+// FM Pipelines only allow Just() to enter the pipeline, reflects non-Just
+// Also unwraps Passthroughs at the end of the pipeline
+export const done = $fm => (isPassthrough($fm) ? $fm._fmToPassthrough : $fm)
+export const appendAddAsyncFn = (promiseChain, curFn) => promiseChain.then(curFn)
+
+// converts exceptions to faults wrapped in promise
+const fAwait = async promise => {
+  if (!isPromise(promise)) return promise
+  try {
+    return await promise
+  } catch (e) {
+    return Fault({ e })
+  }
 }
 
+export const pipeAsyncFm = (...funcs) => async x => {
+  const resolvedX = await fAwait(x)
+  return isNonJustFm(resolvedX) ? done(resolvedX) : [...funcs, done].reduce(appendAddAsyncFn, Promise.resolve(x))
+}
 
+export const pipeFm = (...funcs) =>
+  x => (isNonJustFm(x) ? done(x) : pipe(...[...funcs, done])(x))
+
+//*****************************************************************************
+// Fonad operators (operate directly on fonad as opposed to a wrapped value)
+//*****************************************************************************
+
+// All fonad operators use fCurry, which tags fnxs with prop isFonadOperator=true
+// which allows map to know when to operate directly on the fm, or the conatained value
+
+// TODO: all of these need to be documented and tested
+
+// Add note to FM
+// note = 'msg' or { op, msg, code, here }
+export const addNote = fCurry(($note, $fm) => {
+  const fm = isFm($fm) ? $fm : Just($fm)
+  const fullNote = codeInfoOrStr(extract($note))
+  fm._prependNote(extract(fullNote))
+  return fm
+})
+
+export const addClientErrMsg = fCurry(($msg, $fm) => {
+  if (isFault($fm)) $fm._clientMsg = extract($msg)
+  return $fm
+})
+
+// refectlivy add error message to Fault
+export const addErrCode = fCurry(($code, $fm) => {
+  if (isFault($fm)) $fm._code = extract($code)
+  return $fm
+})
+
+// conditional fonad operators
+
+export const addNoteIf = curry(async ($condOrPred, $note, $fm) =>
+  (await _check($condOrPred, $fm) ? addNote(extract($note), $fm) : $fm))
+
+export const addClientErrMsgIf = curry(async ($condOrPred, $msg, $fm) =>
+  (await _check($condOrPred, $fm) ? addClientErrMsg($msg, $fm) : $fm))
+
+export const addErrCodeIf = curry(async ($condOrPred, $code, $fm) =>
+  (await _check($condOrPred, $fm) ? addErrCode($code, $fm) : $fm))
+
+
+
+//*****************************************************************************
+// Conditional Fonad operators
+//*****************************************************************************
+
+// TODO: doc & test
+export const callIf = curry(async ($condOrPred, $fnOrFnList, $fm) => {
+  if (isNonJustFm($fm)) return $fm
+  if (await _check($condOrPred, $fm)) return call($fnOrFnList, $fm)
+  return $fm
+})
+
+export const callOnFault = curry(($fnOrFnList, fault) => {
+  if (isNotFault(fault)) return fault
+  return _call($fnOrFnList, fault)
+})
+
+// callMethodIf (FOP | NJR)
+//   TODO: doc & test
+//  ifIsFunc(condOrPred) calls method if condOrPred($fm) is true
+//  ifIsNotFunc(condnOrPred) calls method if condnOrPred itself is true
+export const callMethodIf = curry(async ($condOrPred, $method, $args, $fm) => {
+  if (isNonJustFm($fm)) return $fm
+  if (await _check($condOrPred, $fm)) return callMethod($method, $args, $fm)
+  return $fm
+})
 // TODO: this is in the heart, test very well
 // returns true if all preds pass, otherwise false
 // accomadates mixture of sycn and async functions in the list
@@ -548,8 +517,6 @@ const _check = async (condOrPred, fm) => {
 
   return isFunction(condOrPred) ? condOrPred(fm) : !!condOrPred
 }
-
-const _extractList = $list => flatArrayify(extract($list)).map($v => extract($v))
 
 //*****************************************************************************
 // Flow control functions
@@ -623,8 +590,21 @@ export const fIncludes = curry(($val, $fmList) =>
   Just(fIsArray($fmList) && includes(extract($val), extract($fmList))))
 
 //*****************************************************************************
-// Logging
+// Logging and messaging
 //*****************************************************************************
+
+// return a status message
+export const statusMsg = fm => (isFm(fm) ? fm._statusMsg() : `WARNING: can't get status for non-fm: ${json(fm)}`)
+
+// return exception message if Fault with exception, otherwise '' (for testing)
+export const getExceptionMsg = fault =>
+  isFault(fault) && fault._e && fault._e.message ? fault._e.message : ''
+
+export const getNotes = fm => (isFm(fm) ? fm._notes : [])
+
+// return a resonable string representation of a monad
+export const inspect = fm => (isFm(fm) ? fm._inspect() : `WARNING: cant inspect non-monad: ${fm}`)
+
 
 export const fStr = $fm => str(extract($fm))
 export const fStrPretty = $fm => json(extract($fm))
@@ -669,7 +649,6 @@ export const logRawWithMsg = curry(($msg, fmOrVal) => {
   return logRaw(fmOrVal)
 })
 
-
 // logWithMsg (PT)
 //   log given message and fmOrVal, and return fmOrVal
 //    'msg' -> fmOrVal -> fmOrVal
@@ -701,95 +680,7 @@ export const logValWithMsg = curry((msg, val, fm) => {
   return logVal(val, fm)
 })
 
-
-
 //*****************************************************************************
-// Monadic helpers
-//*****************************************************************************
-
-// TODO: test throuroughly
-
-export const fonadify = $a =>
-  isEmptyOrNilJust($a) ? Nothing($a._val) :
-  isFm($a) ? $a :
-  isEmptyOrNil($a) ? Nothing($a) :
-  isError($a) ? Fault({ e: $a }) :
-  Just($a)
-
-// propagate (NJR)
-//   TODO: docs
-//   TODO: test
-//   if isJust(fm) | isNotFm(fm), returns toPropagate
-//   this allows a new value to be inserted in to the pipeline on non error states
-
-export const propagate = curry(($toPropagate, fm) =>
-  (isJust(fm) || isNotFm(fm) ? Just($toPropagate) : fm))
-
-export const switchTo = propagate
-
-// if isFm(fm), convert it to a Just with the given vaue
-// This does not generate a new fm, it converts the existing fm
-export const convertToJust = curry((valForJust, fmToConvert) => {
-  if (isNotFm(fmToConvert)) return fmToConvert
-  const tempJust = Just(valForJust)
-  // TODO: for the sake of staying functional, could use pipe instead of chaining
-  keys(fmToConvert)
-    .filter(k => k !== '_this' && k !== '_notes')
-    .forEach(k => delete fmToConvert[k])
-  keys(tempJust)
-    .filter(k => k !== '_this' && k !== '_notes')
-    .forEach(k => (fmToConvert[k] = tempJust[k]))
-  return fmToConvert
-})
-
-export const capture = curry((captureHere, $fm) => {
-  convertToJust(extract($fm), captureHere)
-  return $fm
-})
-
-export const getNotes = fm => (isFm(fm) ? fm._notes : [])
-
-
-
-
-
-// from https://github.com/jperasmus/pipe-then
-// var _pipe = function pipe() {
-//   for (var _len = arguments.length, functions = Array(_len), _key = 0; _key < _len; _key++) {
-//     functions[_key] = arguments[_key];
-//   }
-
-//   return function(input) {
-//     return functions.reduce(function(chain, func) {
-//       return chain.then(func);
-//     }, Promise.resolve(input));
-//   };
-// };
-
-
-// FMN Pipelines only allow Just() to enter the pipeline, reflects non-Just
-// Also unwraps Passthroughs at the end of the pipeline
-
-export const done = $fm => (isPassthrough($fm) ? $fm._fmToPassthrough : $fm)
-export const appendAddAsyncFn = (promiseChain, curFn) => promiseChain.then(curFn)
-
-// converts exceptions to faults wrapped in promise
-const fAwait = async promise => {
-  if (!isPromise(promise)) return promise
-  try {
-    return await promise
-  } catch (e) {
-    return Fault({ e })
-  }
-}
-
-export const pipeAsyncFm = (...funcs) => async x => {
-  const resolvedX = await fAwait(x)
-  return isNonJustFm(resolvedX) ? done(resolvedX) : [...funcs, done].reduce(appendAddAsyncFn, Promise.resolve(x))
-}
-
-export const pipeFm = (...funcs) =>
-  x => (isNonJustFm(x) ? done(x) : pipe(...[...funcs, done])(x))
 
 const h = here
 export { Just, Nothing, Ok, Fault, Passthrough }
