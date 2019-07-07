@@ -1,59 +1,83 @@
 import { expect } from 'chai'
-import { isPromise, isTruthy } from 'ramda-adjunct'
+import { isPromise, isTruthy, noop } from 'ramda-adjunct'
 import { reflect } from '../src/utils/fn'
 
-import { Just, isJust, isFault } from '../src/fonads'
-import { extract, map, mapMethod, fPromisify, addNote, getExceptionMsg, getNotes } from '../src/fonads'
+import { Just, Ok, Nothing, Passthrough, Fault, isJust, isFault } from '../src/fonads'
+import { extract, map, chain, mapMethod, addNote, getExceptionMsg, getNotes } from '../src/fonads'
 import { call, callMethod } from '../src/fonads'
 
 import {
   testOk, testNothing, testFault, testJust, testRaw,
-  double, quad, asyncQuad, asyncTriple, asyncDouble, asyncAddNote,
+  double, triple, quad, asyncQuad, asyncTriple, asyncDouble, asyncAddNote,
   asyncResolve, asyncFault, asyncReject, asyncThrow, Add, Async, allGood, returnsFault, throws
 } from './testHelpers'
 
-export default function runEnhancedInterfaceTests() {
-  describe('enhanced monadic interface tests', () => {
-    testFonadicPromisify()
+export default function runFonadInterfaceTests() {
+  describe('fonad interface tests', () => {
+    testChain()
+    testMap()
+    testChainAsync()
     testMapAsync()
     testMapAsyncFonadOperator()
     testMapMethod()
     testMapAsyncMethod()
     testCall()
     testCallasync()
-    testCallasyncFonadOperator()
+    testCallAsyncFonadOperator()
     testCallFnLst()
     testCallMethod()
     testCallAsyncMethod()
-    testInstantiateClass() // NYI
   })
 }
 
-const testFonadicPromisify = () => {
-  it('should wait correctly', async () => {
+const ok = Ok()
+const nothing = Nothing()
+const passthrough = Passthrough()
+const fault = Fault({op: 'testing', msg: 'fake msg'})
+const justOne = Just(1)
 
-    const resolvedPromise = asyncResolve('resolved')
-    expect(isPromise(resolvedPromise)).to.equal(true)
-    const resolved = await fPromisify(resolvedPromise)
-    expect(isJust(resolved)).to.satisfy(isTruthy)
-    expect(extract(resolved)).to.equal('resolved')
-
-    const rejectedPromise = asyncReject()
-    expect(isPromise(rejectedPromise)).to.equal(true)
-    const rejected = await fPromisify(rejectedPromise)
-    expect(isFault(rejected)).to.satisfy(isTruthy)
-    expect(getExceptionMsg(rejected)).to.equal('rejected')
-
-    const thrownPromise = asyncThrow()
-    expect(isPromise(thrownPromise)).to.equal(true)
-    const thrown = await fPromisify(thrownPromise)
-    expect(isFault(thrown)).to.satisfy(isTruthy)
-    expect(getExceptionMsg(thrown)).to.equal('thrown')
+const testChain = () => {
+  it('should chain correctly', () => {
+    expect(chain(double, justOne)).to.equal(2)
+    expect(chain(double, 1)).to.equal(2)
+    expect(chain(double, Just(chain(double, justOne)))).to.equal(4)
+    expect(chain(double, Just(chain(double, 1)))).to.equal(4)
+    expect(chain(noop, ok)).to.equal(ok)
+    expect(chain(noop, fault)).to.equal(fault)
+    expect(chain(noop, nothing)).to.equal(nothing)
+    expect(chain(noop, passthrough)).to.equal(passthrough)
   })
 }
+
+const testMap = () => {
+  it('should map correctly', () => {
+    expect(isJust(map(triple, justOne))).to.satisfy(isTruthy)
+    expect(map(triple, justOne)).property('_val', 3)
+    expect(chain(triple, map(triple, justOne))).to.equal(9)
+
+    expect(isJust(map(quad, 2))).to.satisfy(isTruthy)
+    expect(map(quad, 2)).property('_val', 8)
+    expect(chain(triple, map(quad, 2))).to.equal(24)
+
+    expect(map(noop, fault)).to.equal(fault)
+    expect(map(noop, ok)).to.equal(ok)
+    expect(map(noop, nothing)).to.equal(nothing)
+    expect(map(noop, passthrough)).to.equal(passthrough)
+  })
+
+  it('should convert exceptions to Fault', () => {
+    const throwE = () => { throw new Error('test throw') }
+    const chainFault = chain(throwE, justOne)
+    expect(isFault(chainFault)).to.satisfy(isTruthy)
+    const mapFault = map(throwE, justOne)
+    expect(isFault(mapFault)).to.satisfy(isTruthy)
+  })
+}
+
 
 const testMapAsync = () => {
   it('should map async functions correctly', async () => {
+
     // monadic inputs
 
     const resolved = await map(asyncResolve, testJust)
@@ -89,6 +113,60 @@ const testMapAsync = () => {
     expect(isFault(rejected3)).to.satisfy(isTruthy)
 
     const curriedThrower = map(asyncThrow)
+    const thrown3 = await curriedThrower([])
+    expect(isFault(thrown3)).to.satisfy(isTruthy)
+
+    // non just reflectivity
+
+    const reflectedOk = await curriedResolver(testOk)
+    expect(reflectedOk).to.equal(testOk)
+
+    const reflectedNothing = await curriedResolver(testNothing)
+    expect(reflectedNothing).to.equal(testNothing)
+
+    const reflectedFault = await curriedResolver(testFault)
+    expect(reflectedFault).to.equal(testFault)
+  })
+}
+
+const testChainAsync = () => {
+  it('should chain async functions correctly', async () => {
+
+    // monadic inputs
+
+    const resolved = await chain(asyncResolve, testJust)
+    expect(isJust(resolved)).to.equal(false)
+    expect(resolved).to.equal(99)
+
+    const rejected = await chain(asyncReject, testJust)
+    expect(isFault(rejected)).to.satisfy(isTruthy)
+
+    const thrown = await chain(asyncThrow, testJust)
+    expect(isFault(thrown)).to.satisfy(isTruthy)
+
+    // raw inputs
+
+    const resolved2 = await chain(asyncResolve, 88)
+    expect(isJust(resolved2)).to.equal(false)
+    expect(resolved2).to.equal(88)
+
+    const rejected2 = await chain(asyncReject, 88)
+    expect(isFault(rejected2)).to.satisfy(isTruthy)
+
+    const thrown2 = await chain(asyncThrow, 88)
+    expect(isFault(thrown2)).to.satisfy(isTruthy)
+
+    // currying
+
+    const curriedResolver = chain(asyncResolve)
+    const resolved3 = await curriedResolver(testJust)
+    expect(resolved3).to.equal(99)
+
+    const curriedRejector = chain(asyncReject)
+    const rejected3 = await curriedRejector(null)
+    expect(isFault(rejected3)).to.satisfy(isTruthy)
+
+    const curriedThrower = chain(asyncThrow)
     const thrown3 = await curriedThrower([])
     expect(isFault(thrown3)).to.satisfy(isTruthy)
 
@@ -269,7 +347,7 @@ const testMapAsyncFonadOperator = () => {
   })
 }
 
-const testCallasyncFonadOperator = async () => {
+const testCallAsyncFonadOperator = async () => {
   it('should call async fonad opertators correctly', async () => {
     const just = Just('another just')
     const res = call(asyncAddNote('async op call note'), just)
@@ -465,4 +543,3 @@ const testCallAsyncMethod = () => {
   })
 }
 
-const testInstantiateClass = () => null

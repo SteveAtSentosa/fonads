@@ -1,83 +1,58 @@
 import { expect } from 'chai'
-import { equals, lt, gt } from 'ramda'
-import { isPromise, isTruthy, isTrue, isFalse } from 'ramda-adjunct'
+import { isPromise, isTruthy, isFunction } from 'ramda-adjunct'
+import { isError } from '../src/utils/error'
 import {
-  testJust, testOk, testNothing, testFault, testPassthrough,
-  double, triple, square, quad, asyncDouble, asyncTriple, asyncQuad, asyncSquare, asyncResolve,
-  returnsTrue, returnsFalse, returnsTrueAsync, returnsFalseAsync, asyncEq, asyncGt, asyncLt, asyncIsJust
+  testJust, testOk, testNothing, testFault, testPassthrough, double, triple, square, quad,
+  asyncDouble, asyncTriple, asyncQuad, asyncSquare, asyncResolve, asyncReject, asyncThrow
 } from './testHelpers'
 import {
-  Just, Ok, Fault, Nothing, Passthrough, fonadify, extract, check, checkPredList,
-  isFm, isJust, isNotJust, isFault, isNotFault, isNothing, isPassthrough, isNotPassthrough, isNotNothing, isNotFm,
-  isOk, isNotOk, isValue, isNotValue, isStatus, isNotStatus, isEmptyOrNilJust, pipeFm, pipeAsyncFm, reflect
+  Just, Ok, Fault, Nothing, Passthrough, fonadify, extract, isJust, isFault, isNothing,
+  pipeFm, pipeAsyncFm, reflect, fPromisify, getExceptionMsg, addNote, getNotes
 } from '../src/fonads'
 
-const ok = Ok()
-const nothing = Nothing()
-const fault = Fault({op: 'testing', msg: 'fake msg'})
-const justOne = Just(1)
-const passthrough = Passthrough(justOne)
 
-export default function runMonadUtilTests() {
+const justOne = Just(1)
+
+export default function runFonadUtilTests() {
   describe('fonad utility tests', () => {
-    testFonadTypeDetection()
     testFonadify()
+    testFonadicPromisify()
     testPipelines()
-    testPredLists()
-    testConditionLists()
+    testValueExtraction()
+    testNotes()
+    testErrorUtils()
+    testInstantiateClass()
   })
 }
 
-const testFonadTypeDetection = () => {
-  it('should detect fonad types correctly', () => {
-    expect(isFm(ok)).to.deep.equal(ok)
-    expect(isFm(fault)).to.deep.equal(fault)
-    expect(isFm(nothing)).to.deep.equal(nothing)
-    expect(isFm(justOne)).to.deep.equal(justOne)
-    expect(isFm('ok')).to.equal(false)
-    expect(isFm({})).to.equal(false)
+const testErrorUtils = () => {
+  it('should detect errors correctly', () => {
+    expect(isError('')).to.equal(false)
+    expect(isError({})).to.equal(false)
+    expect(isError(new Error('bang'))).to.equal(true)
+  })
+}
 
-    expect(isOk(ok)).to.deep.equal(ok)
-    expect(isNotOk(ok)).to.equal(false)
-    expect(isOk(justOne)).to.equal(false)
-    expect(isOk('ok')).to.equal(false)
-    expect(isOk({ ok })).to.equal(false)
-    expect(isOk([])).to.equal(false)
+const testFonadicPromisify = () => {
+  it('should wait correctly', async () => {
 
-    expect(isJust(justOne)).to.equal(justOne)
-    expect(isNotJust(justOne)).to.equal(false)
-    expect(isJust(nothing)).to.equal(false)
+    const resolvedPromise = asyncResolve('resolved')
+    expect(isPromise(resolvedPromise)).to.equal(true)
+    const resolved = await fPromisify(resolvedPromise)
+    expect(isJust(resolved)).to.satisfy(isTruthy)
+    expect(extract(resolved)).to.equal('resolved')
 
-    expect(isFault(fault)).to.equal(fault)
-    expect(isNotFault(fault)).to.equal(false)
-    expect(isFault(ok)).to.equal(false)
+    const rejectedPromise = asyncReject()
+    expect(isPromise(rejectedPromise)).to.equal(true)
+    const rejected = await fPromisify(rejectedPromise)
+    expect(isFault(rejected)).to.satisfy(isTruthy)
+    expect(getExceptionMsg(rejected)).to.equal('rejected')
 
-    expect(isNothing(nothing)).to.equal(nothing)
-    expect(isNotNothing(nothing)).to.equal(false)
-    expect(isNothing(fault)).to.equal(false)
-
-    expect(isPassthrough(passthrough)).to.equal(passthrough)
-    expect(isNotPassthrough(passthrough)).to.equal(false)
-    expect(isPassthrough(justOne)).to.equal(false)
-
-    // not sure why I created isValue
-    expect(isValue(nothing)).to.equal(nothing)
-    expect(isValue(justOne)).to.equal(justOne)
-    expect(isValue(fault)).to.equal(fault)
-    expect(isValue(ok)).to.equal(false)
-    expect(isNotValue(justOne)).to.equal(false)
-
-    expect(isStatus(fault)).to.equal(fault)
-    expect(isStatus(ok)).to.equal(ok)
-    expect(isStatus(nothing)).to.equal(false)
-    expect(isStatus(justOne)).to.equal(false)
-    expect(isNotStatus(ok)).to.equal(false)
-
-    expect(isEmptyOrNilJust(Just())).to.satisfy(isTruthy)
-    expect(isEmptyOrNilJust(Just(null))).to.satisfy(isTruthy)
-    expect(isEmptyOrNilJust(Just([]))).to.satisfy(isTruthy)
-    expect(isEmptyOrNilJust(Just({}))).to.satisfy(isTruthy)
-    expect(isEmptyOrNilJust(Just([ 'hj' ]))).to.equal(false)
+    const thrownPromise = asyncThrow()
+    expect(isPromise(thrownPromise)).to.equal(true)
+    const thrown = await fPromisify(thrownPromise)
+    expect(isFault(thrown)).to.satisfy(isTruthy)
+    expect(getExceptionMsg(thrown)).to.equal('thrown')
   })
 }
 
@@ -107,7 +82,6 @@ const testFonadify = () => {
     expect(fonadify(testPassthrough)).to.equal(testPassthrough)
   })
 }
-
 
 const testPipelines = () => {
 
@@ -144,227 +118,56 @@ const testPipelines = () => {
   })
 }
 
-const testPredLists = () => {
-  it('should evaluate pred lists correctly', async () => {
+const testValueExtraction = () => {
+  it('should extract values correctly', () => {
+    const testPassthrough = Passthrough(justOne)
+    expect(extract(Just(3))).to.equal(3)
+    expect(extract(Just(['a', 'b']))).to.deep.equal(['a', 'b'])
+    expect(extract(5)).to.equal(5)
+    expect(extract(['y', 'z'])).to.deep.equal(['y', 'z'])
+    expect(extract(Ok())).to.equal(true)
+    expect(extract(Fault())).to.equal(false)
+    expect(extract(Nothing())).to.equal(null)
+    expect(extract(Nothing(null))).to.equal(null)
+    expect(extract(Nothing([]))).to.deep.equal([])
+    expect(extract(Nothing({}))).to.deep.equal({})
+    expect(isFault(Nothing({a:'b'}))).to.satisfy(isTruthy)
+    expect(extract()).to.equal(undefined)
+    expect(extract(null)).to.equal(null)
+    expect(extract(testPassthrough)).to.equal(justOne)
+    expect(extract(extract(testPassthrough))).to.equal(1)
+  })
+}
 
-    // sycn preds only
+const testNotes = () => {
+  it('should identify itself as a fonad operator', () => {
+    expect(addNote.isFonadOperator).to.equal(true)
+    const partialAddNote = addNote('partial')
+    expect(isFunction(partialAddNote)).to.equal(true)
+    expect(partialAddNote.isFonadOperator).to.equal(true)
+  })
 
-    const justTrue = Just(true)
-    const justFalse = Just(false)
+  it('should append notes correctly', () => {
+    const testOk = Ok()
+    const testNothing = Nothing()
+    const testFault = Fault()
+    const testJust = Just('testJust')
+    const testPassthrough = Passthrough(justOne)
 
-    let res = checkPredList(isTrue, true)
-    expect(isPromise(res)).to.equal(true)
-    expect(await res).to.equal(true)
+    expect(getNotes(addNote('ok note',testOk))).to.deep.equal(['ok note'])
+    expect(getNotes(addNote('nothing note',testNothing))).to.deep.equal(['nothing note'])
+    expect(getNotes(addNote('just note',testJust))).to.deep.equal(['just note'])
+    expect(getNotes(addNote('should not save',testPassthrough))).to.deep.equal([])
+    addNote('f1', testFault)
+    addNote('f2', testFault)
+    expect(getNotes(testFault)).to.deep.equal([ 'f2', 'f1' ])
 
-    res = checkPredList(isTrue, justTrue)
-    expect(isPromise(res)).to.equal(true)
-    expect(await res).to.equal(true)
-
-    res = checkPredList(isFalse, justTrue)
-    expect(isPromise(res)).to.equal(true)
-    expect(await res).to.equal(false)
-
-    res = checkPredList([isFalse, isFalse, isFalse], false)
-    expect(isPromise(res)).to.equal(true)
-    expect(await res).to.equal(true)
-
-    res = checkPredList([isFalse, isTrue, isFalse], justTrue)
-    expect(isPromise(res)).to.equal(true)
-    expect(await res).to.equal(false)
-
-    // async preds only
-
-    const isTrueAsync = v => asyncResolve(isTrue(v))
-    const isFalseAsync = v => asyncResolve(isFalse(v))
-
-    res = checkPredList(isTrueAsync, true)
-    expect(isPromise(res)).to.equal(true)
-    expect(await res).to.equal(true)
-
-    res = checkPredList(isFalseAsync, justTrue)
-    expect(isPromise(res)).to.equal(true)
-    expect(await res).to.equal(false)
-
-    res = checkPredList([isTrueAsync, isTrueAsync, isTrueAsync], true)
-    expect(isPromise(res)).to.equal(true)
-    expect(await res).to.equal(true)
-
-    res = checkPredList([isFalseAsync, isFalseAsync, isFalseAsync], justFalse)
-    expect(isPromise(res)).to.equal(true)
-    expect(await res).to.equal(true)
-
-    res = checkPredList([isTrueAsync, isFalseAsync, isTrueAsync], false)
-    expect(isPromise(res)).to.equal(true)
-    expect(await res).to.equal(false)
-
-    res = checkPredList([isFalseAsync, isTrueAsync, isFalseAsync], justFalse)
-    expect(isPromise(res)).to.equal(true)
-    expect(await res).to.equal(false)
-
-
-    // mixture
-
-    res = checkPredList([isFalseAsync, isFalse, isFalseAsync], false)
-    expect(isPromise(res)).to.equal(true)
-    expect(await res).to.equal(true)
-
-    res = checkPredList([isFalse, isTrue, isTrueAsync], justTrue)
-    expect(isPromise(res)).to.equal(true)
-    expect(await res).to.equal(false)
-
-    res = checkPredList([isTrue, isTrueAsync, isFalseAsync], justTrue)
-    expect(isPromise(res)).to.equal(true)
-    expect(await res).to.equal(false)
-
-
-    res = checkPredList([isTrue, isTrueAsync, isFalseAsync], justTrue)
-    expect(isPromise(res)).to.equal(true)
-    expect(await res).to.equal(false)
-
-    // TODO:
-    // faults
-
-    // TODO:
-    // throws
-
-    // TODO:
-    // rejections
+    const justForParital = Just('just for partial')
+    const addNotePartial = addNote('partial')
+    expect(getNotes(addNotePartial(justForParital))).to.deep.equal(['partial'])
+    expect(getNotes(addNotePartial(justForParital))).to.deep.equal(['partial', 'partial'])
   })
 }
 
 
-const testConditionLists = () => {
-
-  it('should evaluate condition lists correctly', async () => {
-
-    // hard only
-
-    let res = check(true, testJust)
-    expect(isPromise(res)).to.equal(true)
-    expect(await res).to.equal(true)
-
-    res = check(false, 'anything')
-    expect(isPromise(res)).to.equal(true)
-    expect(await res).to.equal(false)
-
-    res = check([true, true, true], null)
-    expect(isPromise(res)).to.equal(true)
-    expect(await res).to.equal(true)
-
-    res = check([true, false, true], [])
-    expect(isPromise(res)).to.equal(true)
-    expect(await res).to.equal(false)
-
-    // pred only sync
-
-    res = check(equals(99), 99)
-    expect(isPromise(res)).to.equal(true)
-    expect(await res).to.equal(true)
-
-    res = check(isJust, 99)
-    expect(isPromise(res)).to.equal(true)
-    expect(await res).to.equal(false)
-
-    res = check([lt(100), gt(100)], 99)
-    expect(isPromise(res)).to.equal(true)
-    expect(await res).to.equal(false)
-
-    res = check([lt(100), gt(100, isJust)], Just(101))
-    expect(isPromise(res)).to.equal(true)
-    expect(await res).to.equal(false)
-
-    res = check([lt(50), lt(75)], 99)
-    expect(isPromise(res)).to.equal(true)
-    expect(await res).to.equal(true)
-
-    res = check([lt(50), lt(75), isJust], Just(99))
-    expect(isPromise(res)).to.equal(true)
-    expect(await res).to.equal(true)
-
-    res = check([lt(50), lt(75), isJust], 99)
-    expect(isPromise(res)).to.equal(true)
-    expect(await res).to.equal(false)
-
-    res = check([isJust, isFm, isNotFault], testJust)
-    expect(isPromise(res)).to.equal(true)
-    expect(await res).to.equal(true)
-
-    res = check([isOk, isNotFm, isNotFault], testOk)
-    expect(isPromise(res)).to.equal(true)
-    expect(await res).to.equal(false)
-
-    // pred only async
-
-    res = check(asyncEq(99), 99)
-    expect(isPromise(res)).to.equal(true)
-    expect(await res).to.equal(true)
-
-    res = check([asyncLt(10), asyncEq(99), asyncIsJust], 99)
-    expect(isPromise(res)).to.equal(true)
-    expect(await res).to.equal(false)
-
-    res = check([asyncLt(10), asyncEq(99), asyncIsJust], Just(99))
-    expect(isPromise(res)).to.equal(true)
-    expect(await res).to.equal(true)
-
-    res = check([asyncLt(100), asyncGt(100), asyncLt], Just(101))
-    expect(isPromise(res)).to.equal(true)
-    expect(await res).to.equal(false)
-
-    res = check([asyncLt(50), asyncLt(75)], 99)
-    expect(isPromise(res)).to.equal(true)
-    expect(await res).to.equal(true)
-
-    res = check([asyncLt(50), asyncLt(75)], Just(99))
-    expect(isPromise(res)).to.equal(true)
-    expect(await res).to.equal(true)
-
-    res = check([asyncLt(50), asyncLt(75), asyncIsJust], 99)
-    expect(isPromise(res)).to.equal(true)
-    expect(await res).to.equal(false)
-
-    // mixed
-
-    res = check([returnsTrue, true, returnsTrueAsync, true, asyncIsJust], Just(99))
-    expect(isPromise(res)).to.equal(true)
-    expect(await res).to.equal(true)
-
-    res = check([returnsTrue, true, returnsTrueAsync, false, asyncIsJust], Just(99))
-    expect(isPromise(res)).to.equal(true)
-    expect(await res).to.equal(false)
-
-    res = check([returnsTrue, true, returnsTrueAsync, returnsFalse, asyncIsJust], Just(99))
-    expect(isPromise(res)).to.equal(true)
-    expect(await res).to.equal(false)
-
-    res = check([returnsTrue, true, returnsTrueAsync, returnsFalseAsync, asyncIsJust], Just(99))
-    expect(isPromise(res)).to.equal(true)
-    expect(await res).to.equal(false)
-
-    res = check([returnsTrueAsync, returnsTrue, isJust], 99)
-    expect(isPromise(res)).to.equal(true)
-    expect(await res).to.equal(false)
-
-    res = check([returnsTrueAsync, returnsTrue, isNotJust], 99)
-    expect(isPromise(res)).to.equal(true)
-    expect(await res).to.equal(true)
-
-    res = check([equals(99), true, asyncEq(99), returnsTrue, true, returnsTrueAsync], 99)
-    expect(isPromise(res)).to.equal(true)
-    expect(await res).to.equal(true)
-
-    res = check([equals(99), true, asyncEq(99), returnsTrue, true, returnsTrueAsync], 100)
-    expect(isPromise(res)).to.equal(true)
-    expect(await res).to.equal(false)
-
-    // TODO:
-    // faults
-
-    // TODO:
-    // rejects
-
-    // TODO:
-    // throws
-
-  })
-}
+const testInstantiateClass = () => xit('should test class instantiation')

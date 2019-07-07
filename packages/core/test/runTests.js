@@ -1,11 +1,16 @@
-import runErrorUtilTests from './test.errorUtils'
-import runMonadUtilTests from './test.monadUtils'
-import runMonadicInterfaceTests from './test.monadicInterface'
-import runEnhancedInterfaceTests from './test.enhancedInterface'
+import runFonadTypeTests from  './test.fonadTypes'
+import runFonadUtilTests from './test.monadUtils'
+import runFonadOperatorTests from './test.fonadOperators'
+import runFonadInterfaceTests from './test.fonadInterface'
+import runConditionalListTests from './test.conditionalLists'
+import runCondtionalOperatorTests from './test.conditionalOperators.js'
 
 describe('fonad tests', () => {
-  runErrorUtilTests()
-  runMonadUtilTests()
-  runMonadicInterfaceTests()
-  runEnhancedInterfaceTests()
+  runFonadTypeTests()
+  runFonadUtilTests()
+  runFonadOperatorTests()
+  runFonadInterfaceTests()
+  runConditionalListTests()
+  runCondtionalOperatorTests()
 })
+
