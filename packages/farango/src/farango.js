@@ -3,7 +3,7 @@ import { isTrue, isFalse } from 'ramda-adjunct'
 import { Database, aql } from 'arangojs'
 import { addNote, addNoteIf, isNothing, capture, addErrCode, callIf, callOnFault, returnIf, isFault, isJust, reflect } from '@fonads/core'
 import { Nothing, Just, Fault } from '@fonads/core'
-import { mapMethod, callAsyncMethod, callMethodIf, map, chain, propagate, extract, caseOf, orElse } from '@fonads/core'
+import { mapMethod, callMethod, callMethodIf, map, chain, propagate, extract, caseOf, orElse } from '@fonads/core'
 import { fEq, fIncludes, fProp, fStr } from '@fonads/core'
 import { pipeAsyncFm, pipeFm, instantiateClass, h } from '@fonads/core'
 import { log, logRaw, logMsg, logWithMsg, logValWithMsg } from '@fonads/core'
@@ -147,7 +147,7 @@ export const createCollection = curry(async ($collectionName, $opts, $connection
     // getCollection($collectionName, {}),
     log,
     mapMethod('collection', extract($collectionName)),
-    callAsyncMethod('create', []),
+    callMethod('create', []),
     callOnFault([
       addErrCode(ec.FARANGO_CANT_CREATE_COLLECTION),
       addNote({ msg: `Unable to create collection ${extract($collectionName)}`, here: h() }),

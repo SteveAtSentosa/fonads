@@ -2,11 +2,9 @@ import { expect } from 'chai'
 import { isPromise, isTruthy } from 'ramda-adjunct'
 import { reflect } from '../src/utils/fn'
 
-import { Ok, Just, Fault, Nothing, isJust, isFault } from '../src/fonads'
+import { Just, isJust, isFault } from '../src/fonads'
 import { extract, map, mapMethod, fPromisify, addNote, getExceptionMsg, getNotes } from '../src/fonads'
-import { call, callMethod, callAsyncMethod } from '../src/fonads'
-
-
+import { call, callMethod } from '../src/fonads'
 
 import {
   testOk, testNothing, testFault, testJust, testRaw,
@@ -401,7 +399,7 @@ const testCallMethod = () => {
     expect(r1).to.equal(justAdd)
 
     const r2 = callMethod('three', [1, 2, 3], rawAdd)
-    expect(isJust(r2)).to.satisfy(isTruthy)
+    expect(isJust(r2)).to.equal(false) // no longer auto-fonadifying
     expect(extract(r2)).to.equal(rawAdd)
 
     expect(extract(callMethod('reflect', ['me'], { reflect }))).to.deep.equal({ reflect })
@@ -429,41 +427,41 @@ const testCallAsyncMethod = () => {
     const rawAsync = new Async()
     const justAsync = Just(rawAsync)
 
-    const resolved1 = await callAsyncMethod('resolve', ['I am resolved'], rawAsync)
-    expect(isJust(resolved1)).to.satisfy(isTruthy)
+    const resolved1 = await callMethod('resolve', ['I am resolved'], rawAsync)
+    expect(isJust(resolved1)).to.equal(false) // no longer auto-fonadifying
     expect(extract(resolved1)).to.equal(rawAsync)
 
-    const resolved2 = await callAsyncMethod('resolve', 'I am resolved too', justAsync)
+    const resolved2 = await callMethod('resolve', 'I am resolved too', justAsync)
     expect(resolved2).to.equal(justAsync)
 
-    const rejected1 = await callAsyncMethod('reject', ['I am rejected'], rawAsync)
+    const rejected1 = await callMethod('reject', ['I am rejected'], rawAsync)
     expect(isFault(rejected1)).to.satisfy(isTruthy)
-    const rejected2 = await callAsyncMethod('reject', ['I am rejected too'], justAsync)
+    const rejected2 = await callMethod('reject', ['I am rejected too'], justAsync)
     expect(isFault(rejected2)).to.satisfy(isTruthy)
 
-    const thrown1 = await callAsyncMethod('throw', ['I was thrown'], rawAsync)
+    const thrown1 = await callMethod('throw', ['I was thrown'], rawAsync)
     expect(isFault(thrown1)).to.satisfy(isTruthy)
-    const thrown2 = await callAsyncMethod('throw', ['I was thrown too'], justAsync)
+    const thrown2 = await callMethod('throw', ['I was thrown too'], justAsync)
     expect(isFault(thrown2)).to.satisfy(isTruthy)
 
-    const fault1 = await callAsyncMethod('fault', ['I was thrown'], rawAsync)
+    const fault1 = await callMethod('fault', ['I was thrown'], rawAsync)
     expect(isFault(fault1)).to.satisfy(isTruthy)
-    const fault2 = await callAsyncMethod('fault', ['I was thrown too'], justAsync)
+    const fault2 = await callMethod('fault', ['I was thrown too'], justAsync)
     expect(isFault(fault2)).to.satisfy(isTruthy)
 
     // test currying
-    const curriedAsyncMethod = callAsyncMethod('resolve', ['I am fully resolved'])
+    const curriedAsyncMethod = callMethod('resolve', ['I am fully resolved'])
     const curryResult = await curriedAsyncMethod(justAsync)
     expect(isJust(curryResult)).to.satisfy(isTruthy)
     expect(curryResult).to.equal(justAsync)
 
     // check error conditions
-    expect(isFault(await callAsyncMethod('resolve', [1, 2, 3], {}))).to.satisfy(isTruthy)
-    expect(isFault(await callAsyncMethod('resolve', [1, 2, 3], 'non-object'))).to.satisfy(isTruthy)
-    expect(isFault(await callAsyncMethod('nomethod', [], rawAsync))).to.satisfy(isTruthy)
-    expect(isFault(await callAsyncMethod('nomethod', [], justAsync))).to.satisfy(isTruthy)
-    expect(isFault(await callAsyncMethod('nonFn', [], { nonFn: [] }))).to.satisfy(isTruthy)
-    expect(isFault(await callAsyncMethod('nonFn', [], { nonFn: {} }))).to.satisfy(isTruthy)
+    expect(isFault(await callMethod('resolve', [1, 2, 3], {}))).to.satisfy(isTruthy)
+    expect(isFault(await callMethod('resolve', [1, 2, 3], 'non-object'))).to.satisfy(isTruthy)
+    expect(isFault(await callMethod('nomethod', [], rawAsync))).to.satisfy(isTruthy)
+    expect(isFault(await callMethod('nomethod', [], justAsync))).to.satisfy(isTruthy)
+    expect(isFault(await callMethod('nonFn', [], { nonFn: [] }))).to.satisfy(isTruthy)
+    expect(isFault(await callMethod('nonFn', [], { nonFn: {} }))).to.satisfy(isTruthy)
   })
 }
 

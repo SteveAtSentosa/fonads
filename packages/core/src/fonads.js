@@ -114,7 +114,7 @@ export const mapMethod = curry(($method, $args, $fm) => {
   const op = 'mapMethod()'
   const method = extract($method); const args = _extractList($args);
   const msg = `Exception thrown by map method '${method}'`
-  const { shouldReturn, toReturn } = _checkExecuteMethodArgs(op, method, args, $fm)
+  const { shouldReturn, toReturn } = _checkMapMethodArgs(op, method, args, $fm)
   if (shouldReturn) return toReturn
   const o = extract($fm)
   try {
@@ -128,8 +128,9 @@ export const mapMethod = curry(($method, $args, $fm) => {
 // call [ sync | async, NJR ]
 //   Similar to map, but acting as a fault or passthrough conduit
 //   Calls all funtions sequentially supplying $fm as the arg
-//   Returns Promise($fm) if none of the fns throw/reject/return-fault, otherwise returns Promise(F)
-//   In the case of multiple fns, Promise($fm) a promise is always returned (in case any of fns asycn // TODO: this can change with smartPipe
+//   Returns Promise($fm) if none of the fns
+//    throw/reject/return-fault, otherwise returns Promise(F)
+//   In the case of multiple fns, Promise($fm) a promise is always returned (in case any of fns asycn // TODO: this can change callFnList is smarter bout promises vs. no promises
 //   In the case of a single non-async fn, the output is the same as described above, but not wrapped in a promise
 //   () | [ () ]-> J[a] | a -> $fm | F
 export const call = curry(($fnOrFnList, $fm) => {
@@ -137,92 +138,50 @@ export const call = curry(($fnOrFnList, $fm) => {
   return _call($fnOrFnList, $fm)
 })
 
+// shortcut for call
 export const pt = call;
 
-// --------------------------------- the line ---------------------------------
-
-// callMethod (FOP, NJR)
+// callMethod [ sync | async, NJR ]
 //   Similar to mapMethod, but acting as a fault passthrough conduit
 //   if isJust($fm), for $fm[a] calls a.method() and returns $fm on non Fault
 //   if isNotFm($m), calls $fm.method() and and returns Just($fm)
 //   If an exception thrown pr Fault returned upon callijng a.method(), a Fault is returned
 //   'fn-name' -> [ arg1, arg2, ...] | singleArg -> J[a] | a -> $fm | F
 export const callMethod = curry(($method, $args, $fm) => {
-  const op = 'callMethod()'
-  const args = _extractList($args)
-  const method = extract($method)
-  const { shouldReturn, toReturn } = _checkExecuteMethodArgs(op, method, args, $fm)
-  if (shouldReturn) return toReturn
-  const o = extract($fm)
-  try {
-    const res = o[method](...flatArrayify(args))
-    return isFault(res) ? res : Just($fm)
-  } catch (e) {
-    return Fault({ op, msg: `Exception thrown by method '${method}'`, e })
-  }
+  if (isNonJustFm($fm)) return $fm
+  const res = mapMethod($method, $args, $fm)
+  return isPromise(res) ?
+    res.then(resolvedRes => Promise.resolve(isFault(resolvedRes) || $fm)) :
+    isFault(res) || $fm
 })
 
-// callAsyncMethod (FOP, NJR)
-//   Similar to mapasyncMethod, but acting as a fault or passthrough conduit
-//   if isJust($fm), for fm[a] calls a.method() and returns Promise($fm) on non fault
-//   if isNotFm(fm), calls fm.method() and and returns Promise(Just($fm))
-//   If `method` rejects, throws an exception or returns a Fault, a representative Fault is returned
-//   'fn-name' -> [ arg1, arg2, ...] | singleArg -> J[a] | a -> P($fm | F)
-export const callAsyncMethod = curry(async ($method, $args, $fm) => {
-  const op = 'callAsyncMethod()'
-  const args = _extractList($args)
-  const method = extract($method)
-  const { shouldReturn, toReturn } = _checkExecuteMethodArgs(op, method, args, $fm)
-  if (shouldReturn) return toReturn
-  const o = extract($fm)
-  try {
-    const res = await o[method](...flatArrayify(args))
-    return isFault(res) ? res : Just($fm)
-  } catch (e) {
-    return Fault({op, msg: `Exception thrown by async method '${method}'`, e})
-  }
-})
-
-// TODO: make chain handle async fns correctly
-// chain
+// chain [ sync | async, NJR ]
 //   Can accept either a monad, or a raw value to be chained thorugh `fn`
 //   If isFm($fm) where $fm(v), returns result of calling fn(v)
 //   If isNotFm($fm), returns result of calling fn($fm)
 //   If an exception is thrown as a result of calling fn, a Fault is returned
+//   If $fn is asycn, returns as described above, wrapped in a promise
 //   (a->b) -> J[a] | a -> b | F
 export const chain = curry(($fn, $fm) => {
-  const op = 'chain()'
-  const fn = extract($fn)
-  try {
-    return isFm($fm) ? $fm._chain(fn) : fn($fm)
-  } catch (e) {
-    return Fault({ op, msg: 'Exception thrown by chain function', e })
-  }
+  if (isNonJustFm($fm)) return $fm
+  const res = map($fn,  $fm)
+  return isPromise(res) ?
+    res.then(resolvedRes => Promise.resolve(isFault(resolvedRes) || extract(res))) :
+    isFault(res) || extract(res)
 })
 
 // core interface helpers
 
-// Returns { shouldReturn: bool, toReturn: a }
-// Note that op/method/args are raw (i.e. not monadic)
-const _checkExecuteMethodArgs = (op, method, args, $fm) => {
-  const r = (shouldReturn, toReturn) => ({ shouldReturn, toReturn })
-  if (isNonJustFm($fm)) return r(true, $fm)
-  const o = extract($fm)
-  if (isNotObject(o)) return r(true, Fault({ op, msg: `Non object supplied: ${$fm}` }))
-  if (isNotFunction(o[method])) return r(true, Fault({ op, msg: `Method '${method}' does not exist on object: ${str(o)}` }))
-  return r(false, 'args are good')
-}
-
 // type checking free
 export const _call = curry(($fnOrFnList, $fm) => {
-  if (isArray($fnOrFnList)) return _callFnListAync($fnOrFnList, $fm)
+  if (isArray($fnOrFnList)) return _callFnListAsync($fnOrFnList, $fm)
   const res = map($fnOrFnList, $fm)
   return isPromise(res) ?
     res.then(resolvedRes => Promise.resolve(isFault(resolvedRes) || $fm)) :
     isFault(res) || $fm
 })
 
-export const _callFnListAync = async ($fnList, $fm) => {
+export const _callFnListAsync = async ($fnList, $fm) => {
   let fault = null
   const callList = _extractList($fnList).map(async fn => {
     const res = await call(fn, $fm)
@@ -232,6 +191,42 @@ export const _callFnListAync = async ($fnList, $fm) => {
   return fault || $fm
 }
 
+// TODO: make this guy work,
+// const _captureFirstFault = (capturedFaultOrNull, maybeFault) =>
+//   !capturedFaultOrNull && isFault(maybeFault) ? maybeFault : null
+
+// export const _callFnList = async ($fnList, $fm) => {
+//   let fault = null
+//   const resList = _extractList($fnList).map(fn => {
+//     const res = call(fn, $fm)
+//     if (isPromise(res)) {
+//       return res.then(resolvedRes => {
+//         fault = _captureFirstFault(fault, resolvedRes)
+//         return Promise.resolve(isFault(resolvedRes) || $fm)
+//       })
+//     } else {
+//       fault = _captureFirstFault(fault, res)
+//       return Promise.resolve(isFault(res) || $fm)
+
+//     }
+//   })
+//   if (any(isPromise, resList)) {
+//     return Promise.all(resList).then(() => fault || $fm)
+//   } else {
+//     return fault || $fm
+//   }
+// }
+
+// Returns { shouldReturn: bool, toReturn: a }
+// Note that op/method/args are raw (i.e. not monadic)
+const _checkMapMethodArgs = (op, method, args, $fm) => {
+  const r = (shouldReturn, toReturn) => ({ shouldReturn, toReturn })
+  if (isNonJustFm($fm)) return r(true, $fm)
+  const o = extract($fm)
+  if (isNotObject(o)) return r(true, Fault({ op, msg: `Non object supplied: ${$fm}` }))
+  if (isNotFunction(o[method])) return r(true, Fault({ op, msg: `Method '${method}' does not exist on object: ${str(o)}` }))
+  return r(false, 'args are good')
+}
 
 //*****************************************************************************
 // Core Utilities
@@ -451,13 +446,13 @@ export const addErrCode = fCurry(($code, $fm) => {
 // conditional fonad operators
 
 export const addNoteIf = curry(async ($condOrPred, $note, $fm) =>
-  (await _check($condOrPred, $fm) ? addNote(extract($note), $fm) : $fm))
+  (await check($condOrPred, $fm) ? addNote(extract($note), $fm) : $fm))
 
 export const addClientErrMsgIf = curry(async ($condOrPred, $msg, $fm) =>
-  (await _check($condOrPred, $fm) ? addClientErrMsg($msg, $fm) : $fm))
+  (await check($condOrPred, $fm) ? addClientErrMsg($msg, $fm) : $fm))
 
 export const addErrCodeIf = curry(async ($condOrPred, $code, $fm) =>
-  (await _check($condOrPred, $fm) ? addErrCode($code, $fm) : $fm))
+  (await check($condOrPred, $fm) ? addErrCode($code, $fm) : $fm))
 
 
 
@@ -468,7 +463,7 @@ export const addErrCodeIf = curry(async ($condOrPred, $code, $fm) =>
 // TODO: doc & test
 export const callIf = curry(async ($condOrPred, $fnOrFnList, $fm) => {
   if (isNonJustFm($fm)) return $fm
-  if (await _check($condOrPred, $fm)) return call($fnOrFnList, $fm)
+  if (await check($condOrPred, $fm)) return call($fnOrFnList, $fm)
   return $fm
 })
 
@@ -483,7 +478,7 @@ export const callOnFault = curry(($fnOrFnList, fault) => {
 //  ifIsNotFunc(condnOrPred) calls method if condnOrPred itself is true
 export const callMethodIf = curry(async ($condOrPred, $method, $args, $fm) => {
   if (isNonJustFm($fm)) return $fm
-  if (await _check($condOrPred, $fm)) return callMethod($method, $args, $fm)
+  if (await check($condOrPred, $fm)) return callMethod($method, $args, $fm)
   return $fm
 })
 // TODO: this is in the heart, test very well
@@ -503,7 +498,7 @@ export const checkPredList = curry(async ($predList, $fm) => {
 //   * predFn: single pred, evaluates pred(fm) (pred can be sycn or ansycn)
 //   * [ hardConditions &| predFns]
 
-const _check = async (condOrPred, fm) => {
+const check = async (condOrPred, fm) => {
   // console.log('~~> _check()');
   // console.log('condOrPred: ', condOrPred)
   // console.log('fm: ', fm)
@@ -554,14 +549,14 @@ export const orElse = () => true
 
 // will handle async preds
 export const passthroughIf = curry(async (condOrPred, $fm) =>
-  (await _check(condOrPred, $fm) ? Passthrough($fm) : $fm))
+  (await check(condOrPred, $fm) ? Passthrough($fm) : $fm))
 
 export const returnIf = passthroughIf
 
 // TODO: test
 // Will transfer any notes from an incoming FM
 export const faultIf = curry(async (condOrPred, faultOptions, $fm) => {
-  if (await _check(condOrPred, $fm)) {
+  if (await check(condOrPred, $fm)) {
     const fault = Fault(faultOptions)
     if ( isFm($fm) && $fm._notes.length) fault._setNotes($fm._notes)
     return fault
@@ -618,7 +613,7 @@ export const logMsg = curry(($msg, fm) => {
 })
 
 export const logMsgIf = curry(async ($condOrPred, $msg, $fm) =>
-  (await _check($condOrPred, $fm) ? logMsg(extract($msg), $fm) : $fm))
+  (await check($condOrPred, $fm) ? logMsg(extract($msg), $fm) : $fm))
 
 // log (PT)
 //   Log and return fmOrVal.
@@ -631,7 +626,7 @@ export const log = fmOrVal => {
 }
 
 export const logIf = curry(async ($condOrPred, $fm) => {
-  await _check($condOrPred, $fm) && log($fm)
+  await check($condOrPred, $fm) && log($fm)
   return $fm
 })
 
