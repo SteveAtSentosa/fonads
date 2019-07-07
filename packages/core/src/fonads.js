@@ -5,7 +5,10 @@
 // * Add new notes/here stuff into viz
 
 import { curry, prop, propEq, complement, includes, drop, pipe, keys, all, any, find } from 'ramda'
-import { isObject, isFunction, isNotFunction, isNotObject, isArray, isTruthy, isPromise } from 'ramda-adjunct'
+import {
+  isObject, isFunction, isNotFunction, isNotObject, isArray, isFalsy,
+  isTruthy, isPromise, isNilOrEmpty
+} from 'ramda-adjunct'
 import { flatArrayify, isEmptyOrNil } from './utils/types'
 import { isError, here, throwIf } from './utils/error'
 import { codeInfoOrStr, str, json } from './utils/string'
@@ -73,6 +76,29 @@ export const isNonJustFm = fm => isFm(fm) && isNotJust(fm) ? fm : false
 // fm -> truthy | false
 // returns fm on match, otherwise returns false
 export const isEmptyOrNilJust = fm => isJust(fm) && isEmptyOrNil(fm._val) ? fm : false
+
+
+// any new operators must be added to the list below
+isFm.isFonadOperator = true
+isNotFm.isFonadOperator = true
+isType.isFonadOperator = true
+isNotType.isFonadOperator = true
+isJust.isFonadOperator = true
+isNotJust.isFonadOperator = true
+isFault.isFonadOperator = true
+isNotFault.isFonadOperator = true
+isNothing.isFonadOperator = true
+isNotNothing.isFonadOperator = true
+isOk.isFonadOperator = true
+isNotOk.isFonadOperator = true
+isPassthrough.isFonadOperator = true
+isNotPassthrough.isFonadOperator = true
+isValue.isFonadOperator = true
+isNotValue.isFonadOperator = true
+isStatus.isFonadOperator = true
+isNotStatus.isFonadOperator = true
+isNonJustFm.isFonadOperator = true
+isEmptyOrNilJust.isFonadOperator = true
 
 //*****************************************************************************
 // Core interface
@@ -356,11 +382,7 @@ export const instantiateClass = curry(($className, $Class, $args) => {
 
 const _extractList = $list => flatArrayify(extract($list)).map($v => extract($v))
 
-// ---------------------------------- above the line
-
-// export const defer = con => fn => fn(con)
-// TODO: is this useful (kindof a functionify??)
-export const defer = fn => con => fn(con)
+// experimental
 
 // map a function over a list of $fm's
 // TODO: test the crap out of this
@@ -378,18 +400,7 @@ export const mapOver = curry(($fn, $fmList) => {
 //*****************************************************************************
 
 // TODO: get smartpipe to work
-// from https://github.com/jperasmus/pipe-then
-// var _pipe = function pipe() {
-//   for (var _len = arguments.length, functions = Array(_len), _key = 0; _key < _len; _key++) {
-//     functions[_key] = arguments[_key];Xw
-//   }
-
-//   return function(input) {
-//     return functions.reduce(function(chain, func) {
-//       return chain.then(func);
-//     }, Promise.resolve(input));
-//   };
-// };
+// see https://github.com/jperasmus/pipe-then
 
 // FM Pipelines only allow Just() to enter the pipeline, reflects non-Just
 // Also unwraps Passthroughs at the end of the pipeline
@@ -481,36 +492,37 @@ export const callMethodIf = curry(async ($condOrPred, $method, $args, $fm) => {
   if (await check($condOrPred, $fm)) return callMethod($method, $args, $fm)
   return $fm
 })
-// TODO: this is in the heart, test very well
-// returns true if all preds pass, otherwise false
-// accomadates mixture of sycn and async functions in the list
+
+// checkPredList
+//   returns true if all preds pass, otherwise false
+//   accomadates mixture of sycn and async functions in the list
+//   TODO: if any of the preds throws/rejects/faults, return fault
 export const checkPredList = curry(async ($predList, $fm) => {
   const predList = _extractList($predList)
-  const results = await Promise.all(predList.map(async pred => pred(extract($fm))))
-  return all(isTruthy, results)
+  const results = await Promise.all(predList.map(
+    async pred => pred(pred.isFonadOperator ? $fm : extract($fm))
+  ))
+  // console.log('results: ', results)
+  return !any(isFalsy, results)
 })
 
-// TODO: this is in the heart, test very well
-// TODO: for preds, check to see if is monadic type cheker pred (add tag to monadic type checkiners)
-//       and if so, apply pred the the monad, otherwise apply to extract($fm)
-// $conditions can be
-//   * hardCondition: evaluated for truthyness
-//   * predFn: single pred, evaluates pred(fm) (pred can be sycn or ansycn)
-//   * [ hardConditions &| predFns]
-
-const check = async (condOrPred, fm) => {
-  // console.log('~~> _check()');
-  // console.log('condOrPred: ', condOrPred)
-  // console.log('fm: ', fm)
-  // console.log('condOrPred(fm): ', condOrPred(fm))
-  // const conditions = _extractList($conditions)
-  // const hardConditions = conditions.filter(isNotFunction)
-  // const preds = conditions.filter(isFunction)
-  // const predsPass = await checkPredList(preds, $fm)
-  // const hardsPass = all(isTruthy, hardConditions)
-  // return hardsPass & predsPass
-
-  return isFunction(condOrPred) ? condOrPred(fm) : !!condOrPred
+// check
+//   evalute a condition list
+//   $conditions can be an array of conditions, or a single condition
+//   each condition can be a
+//     * hard condition: evaluated for truthiness
+//     * sync or async pred fn: evaluates pred(fm)
+//   If 1 or more preds are included, a promise is returned in case any are asycn
+//   All predsare  applied against the $fm
+//   The $conditions can be any combination of the hard condition, sync pred, and asycn pred
+//   TODO: if any of the preds throws/rejects/faults, return fault
+export const check = async ($conditions, fm) => {
+  const conditions = _extractList($conditions)
+  const hardConditions = conditions.filter(isNotFunction)
+  const preds = conditions.filter(isFunction)
+  const hardPass = isNilOrEmpty(hardConditions) || !any(isFalsy, hardConditions)
+  const predPass =  isNilOrEmpty(preds) || await checkPredList(preds, fm)
+  return hardPass && predPass
 }
 
 //*****************************************************************************

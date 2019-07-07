@@ -1,4 +1,5 @@
-import { Just, Ok, Fault, Nothing, Passthrough, fCurry } from '../src/fonads'
+import { curry, equals, lt, gt } from 'ramda'
+import { Just, Ok, Fault, Nothing, Passthrough, fCurry, isJust } from '../src/fonads'
 import { addNote } from '../src/fonads'
 
 export const testOk = Ok()
@@ -25,12 +26,24 @@ export const asyncQuad = v => asyncResolve(4*v)
 export const asyncSquare = v => asyncResolve(v*v)
 export const asyncAddNote = fCurry((note, fm) => asyncResolve(addNote(note, fm)))
 
+export const returnsTrue = () => true
+export const returnsFalse = () => false
+export const returnsTrueAsync = () => asyncResolve(true)
+export const returnsFalseAsync = () => asyncResolve(false)
+
+export const asyncEq = curry((a, b) => asyncResolve(equals(a,b)))
+export const asyncLt = curry((a, b) => asyncResolve(lt(a,b)))
+export const asyncGt = curry((a, b) => asyncResolve(gt(a,b)))
+
+export const asyncIsJust = fm => asyncResolve(isJust(fm))
+asyncIsJust.isFonadOperator = true // (faking this for testing
+
 // respolved with v
 export const asyncResolve = v =>
   new Promise((resolve, reject) =>
     setTimeout(() => {
       resolve(v)
-    }, 10),
+    }, 5),
   )
 
 // resolves with testFault

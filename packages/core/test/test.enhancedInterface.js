@@ -21,7 +21,7 @@ export default function runEnhancedInterfaceTests() {
     testMapAsyncMethod()
     testCall()
     testCallasync()
-    testCallAsycnFonadOperator()
+    testCallasyncFonadOperator()
     testCallFnLst()
     testCallMethod()
     testCallAsyncMethod()
@@ -260,22 +260,22 @@ const testCallasync = () => {
 }
 
 const testMapAsyncFonadOperator = () => {
-  it('should map asycn fonad opertators correctly', async () => {
+  it('should map async fonad opertators correctly', async () => {
     const just = Just('anything')
-    const res = map(asyncAddNote('asycn op note'), just)
+    const res = map(asyncAddNote('async op note'), just)
     expect(isPromise(res)).to.equal(true)
     expect(await res).to.equal(just)
-    expect(getNotes(await res)).to.deep.equal(['asycn op note'])
+    expect(getNotes(await res)).to.deep.equal(['async op note'])
   })
 }
 
-const testCallAsycnFonadOperator = async () => {
-  it('should call asycn fonad opertators correctly', async () => {
+const testCallasyncFonadOperator = async () => {
+  it('should call async fonad opertators correctly', async () => {
     const just = Just('another just')
-    const res = call(asyncAddNote('asycn op call note'), just)
+    const res = call(asyncAddNote('async op call note'), just)
     expect(isPromise(res)).to.equal(true)
     expect(await res).to.equal(just)
-    expect(getNotes(await res)).to.deep.equal(['asycn op call note'])
+    expect(getNotes(await res)).to.deep.equal(['async op call note'])
   })
 }
 
