@@ -1,16 +1,20 @@
 import runFonadTypeTests from  './test.fonadTypes'
-import runFonadUtilTests from './test.monadUtils'
+import runMonadUtilTests from './test.monadUtils'
 import runFonadOperatorTests from './test.fonadOperators'
 import runFonadInterfaceTests from './test.fonadInterface'
+import runCallListTest from './test.callLists'
 import runConditionalListTests from './test.conditionalLists'
 import runCondtionalOperatorTests from './test.conditionalOperators.js'
+import runFonadDataOperatorTests from './test.fondadDataOperators'
 
 describe('fonad tests', () => {
   runFonadTypeTests()
-  runFonadUtilTests()
+  runMonadUtilTests()
   runFonadOperatorTests()
   runFonadInterfaceTests()
+  runCallListTest()
   runConditionalListTests()
   runCondtionalOperatorTests()
+  runFonadDataOperatorTests()
 })
 
