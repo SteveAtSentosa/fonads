@@ -117,7 +117,7 @@ const testPipelines = () => {
     expect(await faultPromiseRes).to.equal(testFault)
   })
 
-  xit('it should test actual pipelines')
+  xit('should test actual pipelines')
 }
 
 const testValueExtraction = () => {

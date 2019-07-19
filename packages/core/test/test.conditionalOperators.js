@@ -6,12 +6,12 @@ import {
   mapMethod, chainMethod, extract, fEq, reflect
 } from '../src/fonads'
 import {
-  returnsTrue, returnsFalse, returnsTrueAsync, returnsFalseAsync, asyncSquare, asyncIsJust, asyncIsNotJust,
-  double,
+  returnsTrue, returnsFalse, returnsTrueAsync, returnsTruePromise,  truePromise, returnsFalseAsync, asyncSquare, asyncIsJust, asyncIsNotJust,
+  double, fDouble, fTriple, fDoubleAsync, fTripleAsync, fQuadAsync,
   getMe, clearMe, setMe, doubleMe, squareMe, asyncSquareMe, doit, bail,
   asyncAddNote, asyncFault, testFault, testJust,
   returnsFault, throws, allGood, asyncThrow, asyncReject,
-  Add, AddAsync,
+  Add, AddAsync, falsePromise,
 } from './testHelpers'
 
 export default function runCondtionalOperatorTests() {
@@ -190,28 +190,54 @@ const testCaseOf = () => {
     let res
 
     res = await caseOf([
-      { if: isFault, then: reflect },
-      { if: isJust, then: extract }
+      [ isFault, reflect ],
+      [ isJust, extract ]
     ], just7)
     expect(res).to.equal(7)
 
     res = await caseOf([
-      { if: isFault, then: reflect },
-      { if: [true, isJust, returnsTrue, returnsTrueAsync], then: double }
+      [ isFault, reflect ],
+      [ [true, isJust, returnsTrue, returnsTrueAsync], fDouble ],
     ], just7)
-    expect(res).to.equal(14) // TODO: why not Just??
+    expect(isJust(res)).to.satisfy(isTruthy)
+    expect(extract(res)).to.deep.equal(14)
 
-    // res = await caseOf([
-    //   { if: isFault, then: returnNull },
-    //   { if: [returnsTrue, isJust, true, returnsTrueAsync], then: extract }
-    // ], just7)
-    // expect(res).to.equal(7)
 
-    // res = await caseOf([
-    //   { if: isFault, then: returnNull },
-    //   { if: isJust, then: returnFive }
-    // ], testFault)
-    // expect(res).to.equal(null)
+    res = await caseOf([
+      [ isFault, reflect ],
+      [ [true, isJust, returnsTrue, returnsTrueAsync], [fDouble] ],
+    ], just7)
+    expect(isJust(res)).to.satisfy(isTruthy)
+    expect(extract(res)).to.deep.equal(14)
+
+    res = await caseOf([
+      [ isFault, reflect ],
+      [ [true, isJust, returnsTrue, returnsTrueAsync], [fDoubleAsync, fTriple] ],
+      [ true, reflect ]
+    ], just7)
+    expect(isJust(res)).to.satisfy(isTruthy)
+    expect(extract(res)).to.deep.equal(42)
+
+    res = await caseOf([
+      [ isFault, reflect ],
+      [ false,reflect ],
+      [ [false, falsePromise], reflect ],
+      [ [true, isJust, returnsTruePromise, Just(true), returnsTrueAsync, truePromise], fTripleAsync ],
+      [ false, () => null ],
+      [ orElse, () => null ]
+    ], just7)
+    expect(isJust(res)).to.satisfy(isTruthy)
+    expect(extract(res)).to.deep.equal(21)
+
+    res = await caseOf([
+      [ [true, returnsFalseAsync], fDouble ],
+      [ [true, falsePromise], fTripleAsync ],
+      [ orElse, [fDouble, fQuadAsync] ],
+    ], just7)
+    expect(isJust(res)).to.satisfy(isTruthy)
+    expect(extract(res)).to.deep.equal(56)
   })
-  xit('should test caseOf lots more')
+
+  xit('should test more caseOf scenarios')
 }
+

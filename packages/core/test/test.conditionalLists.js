@@ -3,8 +3,9 @@ import { equals, lt, gt } from 'ramda'
 import { isPromise, isTrue, isFalse } from 'ramda-adjunct'
 import {
   testJust, testOk,
-  asyncResolve, returnsTrue, returnsFalse, returnsTrueAsync,
-  returnsFalseAsync, asyncEq, asyncGt, asyncLt, asyncIsJust
+  asyncResolve, returnsTrue, returnsFalse, returnsTrueAsync, returnsJustTrue, returnsJustFalse,
+  returnsJustTrueAsync, returnsJustFalseAsync, returnsFalseAsync, asyncEq, asyncGt, asyncLt, asyncIsJust,
+  truePromise, justTruePromise, falsePromise, justFalsePromise, returnsTruePromise
 } from './testHelpers'
 import {
   Just, check, checkPredList,
@@ -30,10 +31,19 @@ const testPredLists = () => {
 
     const justTrue = Just(true)
     const justFalse = Just(false)
+    const dummy = 'dummy'
 
     let res = checkPredList(isTrue, true)
     expect(isPromise(res)).to.equal(true)
     expect(await res).to.equal(true)
+
+    res = checkPredList(returnsJustTrue, dummy)
+    expect(isPromise(res)).to.equal(true)
+    expect(await res).to.equal(true)
+
+    res = checkPredList(returnsJustFalse, dummy)
+    expect(isPromise(res)).to.equal(true)
+    expect(await res).to.equal(false)
 
     res = checkPredList(isTrue, justTrue)
     expect(isPromise(res)).to.equal(true)
@@ -60,13 +70,25 @@ const testPredLists = () => {
     expect(isPromise(res)).to.equal(true)
     expect(await res).to.equal(true)
 
+    res = checkPredList(returnsJustTrueAsync, dummy)
+    expect(isPromise(res)).to.equal(true)
+    expect(await res).to.equal(true)
+
+    res = checkPredList(returnsJustFalseAsync, dummy)
+    expect(isPromise(res)).to.equal(true)
+    expect(await res).to.equal(false)
+
     res = checkPredList(isFalseAsync, justTrue)
     expect(isPromise(res)).to.equal(true)
     expect(await res).to.equal(false)
 
-    res = checkPredList([isTrueAsync, isTrueAsync, isTrueAsync], true)
+    res = checkPredList([isTrueAsync, returnsJustTrueAsync, isTrueAsync, isTrueAsync], true)
     expect(isPromise(res)).to.equal(true)
     expect(await res).to.equal(true)
+
+    res = checkPredList([isTrueAsync, returnsJustFalseAsync, isTrueAsync, isTrueAsync], true)
+    expect(isPromise(res)).to.equal(true)
+    expect(await res).to.equal(false)
 
     res = checkPredList([isFalseAsync, isFalseAsync, isFalseAsync], justFalse)
     expect(isPromise(res)).to.equal(true)
@@ -99,21 +121,61 @@ const testPredLists = () => {
     expect(isPromise(res)).to.equal(true)
     expect(await res).to.equal(false)
   })
+
+  xit('should test hard conditions enclosed by a promise')
 }
 
 const testConditionListsHard = () => {
 
   it('should evaluate hard condition lists correctly', async () => {
 
-    let res = check(true, testJust)
+    const dummy = 'dummy'
+
+    let res = check(true, dummy)
     expect(isPromise(res)).to.equal(true)
     expect(await res).to.equal(true)
+
+    res = check('truthy', dummy)
+    expect(isPromise(res)).to.equal(true)
+    expect(await res).to.equal(true)
+
+    res = check(Just(true), dummy)
+    expect(isPromise(res)).to.equal(true)
+    expect(await res).to.equal(true)
+
+    res = check([truePromise, justTruePromise, true, Just(true)], dummy)
+    expect(isPromise(res)).to.equal(true)
+    expect(await res).to.equal(true)
+
+    res = check([true, true, false], dummy)
+    expect(isPromise(res)).to.equal(true)
+    expect(await res).to.equal(false)
+
+    res = check([true, true, Just(false)], dummy)
+    expect(isPromise(res)).to.equal(true)
+    expect(await res).to.equal(false)
+
+    res = check([true, true, Just(false)], dummy)
+    expect(isPromise(res)).to.equal(true)
+    expect(await res).to.equal(false)
+
+    res = check([true, true, falsePromise], dummy)
+    expect(isPromise(res)).to.equal(true)
+    expect(await res).to.equal(false)
+
+    res = check([true, true, justFalsePromise], dummy)
+    expect(isPromise(res)).to.equal(true)
+    expect(await res).to.equal(false)
 
     res = check(false, 'anything')
     expect(isPromise(res)).to.equal(true)
     expect(await res).to.equal(false)
 
-    res = check([true, true, true], null)
+    res = check(Just(false), 'anything')
+    expect(isPromise(res)).to.equal(true)
+    expect(await res).to.equal(false)
+
+    res = check([true, Just(true), true], null)
     expect(isPromise(res)).to.equal(true)
     expect(await res).to.equal(true)
 
@@ -121,6 +183,9 @@ const testConditionListsHard = () => {
     expect(isPromise(res)).to.equal(true)
     expect(await res).to.equal(false)
 
+    res = check([true, true, Just(false)], [])
+    expect(isPromise(res)).to.equal(true)
+    expect(await res).to.equal(false)
   })
 }
 
@@ -132,6 +197,10 @@ const testConditionListsSync = () => {
     expect(isPromise(res)).to.equal(true)
     expect(await res).to.equal(true)
 
+    res = check(returnsTruePromise, 99)
+    expect(isPromise(res)).to.equal(true)
+    expect(await res).to.equal(true)
+
     res = check(isJust, 99)
     expect(isPromise(res)).to.equal(true)
     expect(await res).to.equal(false)
@@ -140,11 +209,11 @@ const testConditionListsSync = () => {
     expect(isPromise(res)).to.equal(true)
     expect(await res).to.equal(false)
 
-    res = check([lt(100), gt(100, isJust)], Just(101))
+    res = check([lt(100), returnsTrue, gt(100, isJust)], Just(101))
     expect(isPromise(res)).to.equal(true)
     expect(await res).to.equal(false)
 
-    res = check([lt(50), lt(75)], 99)
+    res = check([lt(50), lt(75), returnsJustTrue], 99)
     expect(isPromise(res)).to.equal(true)
     expect(await res).to.equal(true)
 
@@ -206,7 +275,7 @@ const testConditionListsMixed = () => {
 
   it('should evaluate mixed condition lists correctly', async () => {
 
-    let res = check([returnsTrue, true, returnsTrueAsync, true, asyncIsJust], Just(99))
+    let res = check([returnsTrue, true, returnsJustTrue, returnsTrueAsync, Just(true), asyncIsJust], Just(99))
     expect(isPromise(res)).to.equal(true)
     expect(await res).to.equal(true)
 
@@ -215,6 +284,10 @@ const testConditionListsMixed = () => {
     expect(await res).to.equal(false)
 
     res = check([returnsTrue, true, returnsTrueAsync, returnsFalse, asyncIsJust], Just(99))
+    expect(isPromise(res)).to.equal(true)
+    expect(await res).to.equal(false)
+
+    res = check([returnsTrue, true, returnsTrueAsync, Just(false), asyncIsJust], Just(99))
     expect(isPromise(res)).to.equal(true)
     expect(await res).to.equal(false)
 
@@ -230,7 +303,7 @@ const testConditionListsMixed = () => {
     expect(isPromise(res)).to.equal(true)
     expect(await res).to.equal(true)
 
-    res = check([equals(99), true, asyncEq(99), returnsTrue, true, returnsTrueAsync], 99)
+    res = check([equals(99), true, asyncEq(99), returnsTrue, Just(true), returnsTrueAsync], 99)
     expect(isPromise(res)).to.equal(true)
     expect(await res).to.equal(true)
 

@@ -18,14 +18,26 @@ export const throws = () => {
 export const doit = true
 export const bail = false
 
-// experimental extract ...
-export const double = v => {
-  // console.log('~~> double()')
-  return 2*extract(v)
-}
+export const truePromise = Promise.resolve(true)
+export const justTruePromise = Promise.resolve(Just(true))
+export const falsePromise = Promise.resolve(false)
+export const justFalsePromise = Promise.resolve(Just(false))
+
+export const double = v => 2*v
 export const triple = v => 3*v
 export const quad = v => 4*v
 export const square = v => v*v
+
+export const fDouble = v => Just(2*extract(v))
+export const fTriple = v => Just(3*extract(v))
+export const fQuad = v => Just(4*extract(v))
+export const fSquare = v => Just(extract(v)*extract(v))
+
+export const fDoubleAsync = v => asyncResolve(Just(2*extract(v)))
+export const fTripleAsync = v => asyncResolve(Just(3*extract(v)))
+export const fQuadAsync = v => asyncResolve(Just(4*extract(v)))
+export const fSquareAsync = v => asyncResolve(Just(extract(v)*extract(v)))
+
 
 let _me = 'uninitialized'
 export const getMe = () => _me
@@ -52,6 +64,15 @@ export const returnsTrue = () => true
 export const returnsFalse = () => false
 export const returnsTrueAsync = () => asyncResolve(true)
 export const returnsFalseAsync = () => asyncResolve(false)
+
+export const returnsTruePromise = () => Promise.resolve(true)
+export const returnsFalsePromise = () => Promise.resolve(false)
+
+export const returnsJustTrue = () => Just(true)
+export const returnsJustFalse = () => Just(false)
+export const returnsJustTrueAsync = () => asyncResolve(Just(true))
+export const returnsJustFalseAsync = () => asyncResolve(Just(false))
+
 
 export const asyncEq = curry((a, b) => asyncResolve(equals(a,b)))
 export const asyncLt = curry((a, b) => asyncResolve(lt(a,b)))

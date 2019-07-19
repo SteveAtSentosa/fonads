@@ -9,12 +9,12 @@ import runFonadDataOperatorTests from './test.fondadDataOperators'
 
 describe('fonad tests', () => {
   runFonadTypeTests()
-  runMonadUtilTests()
-  runFonadOperatorTests()
-  runFonadInterfaceTests()
-  runCallListTest()
-  runConditionalListTests()
-  runCondtionalOperatorTests()
-  runFonadDataOperatorTests()
+  // runMonadUtilTests()
+  // runFonadOperatorTests()
+  // runFonadInterfaceTests()
+  // runCallListTest()
+  // runConditionalListTests()
+  // runCondtionalOperatorTests()
+  // runFonadDataOperatorTests()
 })
 

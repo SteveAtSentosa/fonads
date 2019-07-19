@@ -1,19 +1,18 @@
-import { curry, mergeLeft, prop } from 'ramda'
+import { curry, mergeLeft, prop, path } from 'ramda'
 import { isTrue, isFalse } from 'ramda-adjunct'
 import { Database, aql } from 'arangojs'
-import { addNote, addNoteIf, isNothing, capture, addErrCode, callIf, callOnFault, returnIf, isFault, isJust, reflect } from '@fonads/core'
+import { addNote, addNoteIf, isNothing, capture, addErrCode, addErrCodeIfNone, callIf, pt } from '@fonads/core'
+import { callOnFault, returnIf, isFault, isJust, reflect } from '@fonads/core'
 import { Nothing, Just, Fault } from '@fonads/core'
-import { mapMethod, callMethod, callMethodIf, map, chain, propagate, extract, caseOf, orElse } from '@fonads/core'
-import { fEq, fIncludes, fProp, fStr } from '@fonads/core'
-import { pipeAsyncFm, pipeFm, instantiateClass, h } from '@fonads/core'
-import { log, logRaw, logMsg, logWithMsg, logValWithMsg } from '@fonads/core'
+import { mapMethod, callMethod, callMethodIf, map, chain, call, propagate, extract, caseOf, orElse } from '@fonads/core'
+import { fEq, fIncludes, fProp, fStr, fIsTrue, fIsFalse } from '@fonads/core'
+import { pipeAsyncFm, instantiateClass, h } from '@fonads/core'
+import { log, logRaw, logMsg, logWithMsg, logTypeWithMsg, logValWithMsg, logStatus, logRawWithMsg } from '@fonads/core'
 import { ec } from './error'
 
 const defaultServerUrl = 'http://127.0.0.1:8529'
-
 const graceful = true
 
-console.log('mapMethod: ', mapMethod)
 // TODO:
 // * I probably can remove asycn fn prependers wheenver returning resuilt of pipeAsycnFm
 // * add active database from connection where appropriate
@@ -58,41 +57,69 @@ const _validateConnection = async $connection =>
     propagate($connection))
   ($connection)
 
-export const databaseExists = curry(async ($dbName, $connection) =>
-  pipeAsyncFm(
+export const databaseExists = curry(async ($dbName, $connection) => {
+  return pipeAsyncFm(
+    _pushActiveDb('_system', $connection),
     mapMethod('listDatabases', []),
-    fIncludes($dbName))
-  ($connection))
+    _popActiveDb($connection),
+    fIncludes($dbName),
+  )($connection)
+})
 
 const _isGraceful = $opts => !!fProp('graceful', $opts)
+const _shouldUse = $opts => !!fProp('use', $opts)
 
 // createDatabase [asycn, reflective]
 //   given a conneciton, create a dataBase
 //   opts {
-//     use:      bool // use the DB after creating
-//     graceful: bool // if db already exists, do not report error
+//     graceful: bool // if db already exists, do not return fault
+//     use:      bool // use the specified DB
 //   }
 //   '$dbName' $connection -> P($connection | F )
 export const createDatabase = curry(async ($dbName, $opts, $connection) =>
   pipeAsyncFm(
-    // returnIf(fProp('graceful', $opts) && databaseExists($dbName)), // IF i get the fancy pred checker working
-    // returnIf(_isGraceful($opts) && (await databaseExists($dbName, $connection))), <----------- not working with current pred structure
-    // logWithMsg('returnIf'),
+    callIf([_shouldUse($opts), databaseExists($dbName)], useDatabase($dbName)),
+    returnIf([_isGraceful($opts), databaseExists($dbName)]),
     mapMethod('createDatabase', extract($dbName)),
     propagate($connection),
-    callIf(fProp('use', $opts), useDatabase($dbName)),
-    callOnFault([addErrCode(ec.FARANGO_CANT_CREATE_DB), addNote({ msg: `Unable to create database '${extract($dbName)}'`, here: h() })]),
+    callIf(_shouldUse($opts), useDatabase($dbName)),
+    callOnFault([
+      addErrCodeIfNone(ec.FARANGO_CANT_CREATE_DB),
+      addNote({ msg: `Unable to create database '${extract($dbName)}'`, here: h() })
+    ]),
   )($connection),
 )
+
+
+// logMsg('~~> createDatabase()'),
+// returnValIf(databaseExists($dbName),
+//   _isGraceful($opts) ?
+//     $connection :
+//     Fault({ op: 'Creating Database', msg: `database already exists '${extract($dbName)}'`, here: h() })
+// ),
+// logWithMsg('after returnValIf'),
+// // caseOf([
+  // //   [ _isGraceful($opts), () => $connection ],
+  // //   [ fElse , () => Fault('you got a problem homey')]
+  // // ])
+  // caseOf([
+  //   { if: _isGraceful($opts), then: () => $connection },
+  //   { else: () => Fault('you got a problem homey') }
+  // ])
+
+
 
 // useDatabase [reflective]
 // Given a conneciton, use a database (i.e. make active)
 // 'dbName' -> $connection -> $connection | F
 export const useDatabase = curry(($dbName, $connection) =>
-  pipeFm(
+  pipeAsyncFm(
     mapMethod('useDatabase', extract($dbName)),
     propagate($connection),
-    callOnFault([addErrCode(ec.FARANGO_CANT_USE_SPECIFIED_DB), addNote({ msg: `Unable to use database '${extract($dbName)}'`, here: h() })]),
+    callOnFault([
+      addErrCode(ec.FARANGO_CANT_USE_SPECIFIED_DB),
+      addNote({ msg: `Unable to use database '${extract($dbName)}'`, here: h() })
+    ]),
   )($connection),
 )
 
@@ -110,10 +137,10 @@ export const getCollection = curry(async ($collectionName, $opts, $connection) =
     capture(collection),
     mapMethod('exists', []),
     caseOf([
-      [isTrue, () => collection],
-      [isFalse, () => _isGraceful($opts) ? Nothing() : Fault({ ...errInfo, here: h() })],
-      [isFault, addNote({ ...errInfo, here: h() })],
-      [orElse, () => Fault({ ...errInfo, here: h() })]
+      [ fIsTrue, () => collection ],
+      [ fIsFalse, () => _isGraceful($opts) ? Nothing() : Fault({ ...errInfo, here: h() }) ],
+      [ isFault, addNote({ ...errInfo, here: h() }) ],
+      [ orElse, () => Fault({ ...errInfo, here: h() }) ]
     ]),
   )($connection)
 })
@@ -122,11 +149,13 @@ export const getCollection = curry(async ($collectionName, $opts, $connection) =
 export const collectionExists = curry(($collectionName, $connection) =>
   pipeAsyncFm(
     getCollection($collectionName, { graceful }),
+    logWithMsg('after getCollection'),
     caseOf([
-      [isJust, reflect],
-      [isNothing, () => Just(false)],
-      [orElse, reflect]
+      // [ isJust, reflect ],
+      [ isNothing, () => Just(false) ],
+      // [ orElse, reflect ]
     ]),
+    logWithMsg('after caseOf'),
   )
 )
 
@@ -139,24 +168,30 @@ export const collectionExists = curry(($collectionName, $connection) =>
 //   '$collectionName' -> {$connection} -> J({collection}) | F
 export const createCollection = curry(async ($collectionName, $opts, $connection) => {
   return pipeAsyncFm(
-    // collectionExists($collectionName, $connection),
+    collectionExists($collectionName, $connection),
     // returnIf( [isTrue, _isGraceful($opts)])
     // returnIf(fProp('graceful', $opts) && await collectionExists($collectionName, $connection)), // TODO: can I make return if smart about promises??,a and also about hard condition vs pred?
     // logWithMsg('after returnIf'),
     // addNoteIf(isNothing, { op: 'Getting doc by id/key', msg: `no document found for id/key '${extract($idOrKey)}'`, here: h() }),
     // getCollection($collectionName, {}),
-    log,
-    mapMethod('collection', extract($collectionName)),
-    callMethod('create', []),
-    callOnFault([
-      addErrCode(ec.FARANGO_CANT_CREATE_COLLECTION),
-      addNote({ msg: `Unable to create collection ${extract($collectionName)}`, here: h() }),
-    ]),
+    // mapMethod('collection', extract($collectionName)),
+    // callMethod('create', []),
+    // callOnFault([
+    //   addErrCode(ec.FARANGO_CANT_CREATE_COLLECTION),
+    //   addNote({ msg: `Unable to create collection ${extract($collectionName)}`, here: h() }),
+    // ]),
   )($connection)
 })
 
-// note this can change with versions of arango
+// note these can change with versions of arango
 const _clName = $collection => chain(prop('name'), $collection)
+const _activeDb = $connection => {
+  // console.log('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~> _activeDb(), connection: ', $connection)
+  // const activeDb = path(['_connection', '_databaseName'], $connection)
+  // console.log(':) :) :) :) :) :) :) :) :) activeDb: ', activeDb)
+  // // return chain(prop('_databaseName'), $connection)
+  return chain(path(['_connection', '_databaseName']), $connection)
+}
 
 
 // TODO: accomidate {$collection} or '$collection' where the second is a name
@@ -234,3 +269,26 @@ export const dropDatabase = curry(async ($name, $connection) =>
 // //   )($db)
 
 // // })
+
+//*****************************************************************************
+// Helpers
+//*****************************************************************************
+
+const _activeDbStack = []
+
+const _pushActiveDb = curry(async ($dbName, $connection, passthrough) => {
+  _activeDbStack.push(_activeDb($connection))
+  const res = await useDatabase($dbName, $connection)
+  if (isFault(res)) return res
+  return passthrough
+})
+
+// passthrough or fault
+const _popActiveDb = curry(async ($connection, passthrough) => {
+  if ( _activeDbStack.lengh === 0 ) return passthrough
+  const dbToActivate = _activeDbStack.pop()
+  const res = await useDatabase(dbToActivate, $connection)
+  return isFault(res) || passthrough
+})
+
+

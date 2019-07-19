@@ -4,22 +4,6 @@
 // * update fns to accept fm wrapped in promise ???  Probably not since pipeline handles promises so well
 // * Add new notes/here stuff into viz
 
-// CORE TODO:
-// * Formalize concept of action list, which can be parallel, pipeline, passthrough, etc (see notes for caseOf)
-// * Seems like things are getting shakey, do a careful think on concepts, approaches, and see if I can codify them
-//   and they make sense and will always be consistent (think isFonadOperator, when to reflect, etc etc)
-//   - is there a way to auto handle promise vs. non promise based check (this is core)
-//   - pomise based vs non-promised base pipe?
-// * Very careful readthrough
-//   - make sure all conditionals and condtional checks are returning Faults when needed (everywhere check is called could return a fult)
-//   - Make sure calling _shouldReflect everywhere needed
-//   - Very careful focus on conditionals (these are still sloppy)
-//   - General correctness
-// * More thourough tests of conditionals, and condtional failures !
-// * Passthrough -> Inert ?
-// * NJR -> fault or pasthrough reflective ?
-// * Careful examination of application of isFault vs. isNonJustFm
-
 import { curry, prop, propOr, propEq, complement, includes, drop, pipe, keys, any, all, find } from 'ramda'
 import {
   isObject, isFunction, isNotFunction, isNotObject,
@@ -93,11 +77,6 @@ export const isNonJustFm = fm => isFm(fm) && isNotJust(fm) ? fm : false
 // returns fm on match, otherwise returns false
 export const isEmptyOrNilJust = fm => isJust(fm) && isEmptyOrNil(fm._val) ? fm : false
 
-// fm -> truthy | false
-// returns fm on match, otherwise returns false
-export const isFaultOrPassthrough = fm =>
-  isFm(fm) && (isFault(fm) || isPassthrough(fm)) ? fm : false
-
 
 // any new operators must be added to the list below
 // TODO: can I do this in a smarter way with prototypes or something, or a wrapper fxn around operator definitions
@@ -132,7 +111,7 @@ isEmptyOrNilJust.isFonadOperator = true
 //   if $fn is async, same behaviour, except enclosed in a promise
 //   (a->b) -> J[a] | a -> J[b] | F | Promise(J[b] | F)
 export const map = curry(($fn, $fm) => {
-  if (_shouldReflect($fm, $fn)) return $fm
+  if (_shouldReflect($fn, $fm)) return $fm
   const op = 'map()'
   const msg = 'Exception thrown by map function'
   const fn = extract($fn)
@@ -158,24 +137,11 @@ export const map = curry(($fn, $fm) => {
 //   If $fn is asycn, returns as described above, wrapped in a promise
 //   (a->b) -> J[a] | a -> b | F
 export const chain = curry(($fn, $fm) => {
-  console.log('~~> chain()')
-  if (_shouldReflect($fm, $fn)) return $fm
+  if (_shouldReflect($fn, $fm)) return $fm
   const res = map($fn,  $fm)
-  console.log('chain res: ', res)
-  if (isPromise(res)) {
-    return res.then(resolvedRes => Promise.resolve(
-      isFonadOperator($fn) ? resolvedRes : extract(resolvedRes)
-      // isFault(resolvedRes) || (isFonadOperator($fn) && isNotJust($fm)) ? resolvedRes : extract(resolvedRes) // TODO: Hoooooookey
-    ))
-  } else {
-    return isFonadOperator($fn) ? res : extract(res)
-    // return isFault(res) || (isFonadOperator($fn) && isNotJust($fm)) ? res : extract(res) // TODO: Hoooooookey
-    // return isFault(res) || (isFonadOperator($fn) && isNotJust($fm)) ? res : extract(res) // TODO: Hoooooookey
-  }
-
-  // return isPromise(res) ?
-  //   res.then(resolvedRes => Promise.resolve(isFault(resolvedRes) || extract(resolvedRes))) :
-  //   isFault(res) || extract(res)
+  return isPromise(res) ?
+    res.then(resolvedRes => Promise.resolve(isFault(resolvedRes) || extract(resolvedRes))) :
+    isFault(res) || extract(res)
 })
 
 // mapMethod [ sync | async, NJR ]
@@ -219,7 +185,7 @@ export const chainMethod = curry(($method, $args, $fm) => {
 //   In the case of a single non-async fn, the output is the same as described above, but not wrapped in a promise
 //   () | [ () ]-> J[a] | a -> $fm | F
 export const call = curry(($fnOrFnList, $fm) => {
-  if (_shouldReflect($fm, $fnOrFnList)) return $fm
+  if (_shouldReflect($fnOrFnList, $fm)) return $fm
   return _call($fnOrFnList, $fm)
 })
 
@@ -243,33 +209,29 @@ export const callMethod = curry(($method, $args, $fm) => {
 // core interface helpers
 
 const isFonadOperator = $fn => !!($fn && extract($fn).isFonadOperator)
-const isNotFonadOperator = complement(isFonadOperator)
 
-const _shouldReflect = ($fm, $fnOrFnList=[] ) => {
-  if (any(isFonadOperator, _extractList($fnOrFnList))) return false
-  return isNonJustFm($fm)
-  // return !any(isFonadOperator, _extractList($fnOrFnList)) && isNonJustFm($fm)
-}
-
+const _shouldReflect = ($fnOrFnList, $fm) =>
+  !any(isFonadOperator, _extractList($fnOrFnList)) && isNonJustFm($fm)
 
 // type checking free
 export const _call = curry(($fnOrFnList, $fm) => {
-  // console.log('~~> _call()')
   if (isArray($fnOrFnList)) return _callFnListAsync($fnOrFnList, $fm)
   const res = map($fnOrFnList, $fm)
-  // console.log('<~~ _call()')
   return isPromise(res) ?
     res.then(resolvedRes => Promise.resolve(isFault(resolvedRes) || $fm)) :
     isFault(res) || $fm
 })
 
 const _callFnListAsync = ($fnList, $fm) => {
+  console.log('~~> _callFnListAsync()')
   const final =  v => isFault(v) || $fm
   const callList = _extractList($fnList)
   const mapList = callList.map(fn => async v => isFault(await _call(fn,v)) || $fm)
-  return pipeAsync(...mapList, final)($fm)
+  const toRet = pipeAsync(...mapList, final)($fm)
+  console.log('<~~ _callFnListAsync(): ', toRet)
+  return toRet
+  // return pipeAsync(...mapList, final)($fm)
 }
-
 
 // Returns { shouldReturn: bool, toReturn: a }
 // Note that op/method/args are raw (i.e. not monadic)
@@ -277,8 +239,8 @@ const _checkMapMethodArgs = (op, method, args, $fm) => {
   const r = (shouldReturn, toReturn) => ({ shouldReturn, toReturn })
   if (isNonJustFm($fm)) return r(true, $fm)
   const o = extract($fm)
-  if (isNotObject(o)) return r(true, Fault({ op, msg: `For method '${method}', non object supplied: ${json(o)}` }))
-  if (isNotFunction(o[method])) return r(true, Fault({ op, msg: `Method '${json(method)}' does not exist on object: ${json(o)}` }))
+  if (isNotObject(o)) return r(true, Fault({ op, msg: `Non object supplied: ${$fm}` }))
+  if (isNotFunction(o[method])) return r(true, Fault({ op, msg: `Method '${method}' does not exist on object: ${str(o)}` }))
   return r(false, 'args are good')
 }
 
@@ -493,32 +455,16 @@ export const addErrCodeIfNone = fCurry(($code, $fm) => {
 
 // conditional fonad operators
 
-export const addNoteIf = curry(async ($conditions, $note, $fm) => {
-  const shouldAddNote = await check($conditions, $fm)
-  return (
-    isFault(shouldAddNote) ? shouldAddNote :
-    shouldAddNote ? addNote(extract($note)) :
-    $fm
-  )
-})
+export const addNoteIf = curry(async ($conditions, $note, $fm) =>
+  (await check($conditions, $fm) ? addNote(extract($note), $fm) : $fm))
 
-export const addClientErrMsgIf = curry(async ($conditions, $msg, $fm) => {
-  const shouldAddClientMsg = await check($conditions, $fm)
-  return (
-    isFault(shouldAddClientMsg) ? shouldAddClientMsg :
-    shouldAddClientMsg ? addClientErrMsg($msg, $fm) :
-    $fm
-  )
-})
+export const addClientErrMsgIf = curry(async ($conditions, $msg, $fm) =>
+  (await check($conditions, $fm) ? addClientErrMsg($msg, $fm) : $fm))
 
-export const addErrCodeIf = curry(async ($conditions, $code, $fm) => {
-  const shouldAddErrorCodeMsg = await check($conditions, $fm)
-  return (
-    isFault(shouldAddErrorCodeMsg) ? shouldAddErrorCodeMsg :
-    shouldAddErrorCodeMsg ? addErrCode($code, $fm) :
-    $fm
-  )
-})
+export const addErrCodeIf = curry(async ($conditions, $code, $fm) =>
+  (await check($conditions, $fm) ? addErrCode($code, $fm) : $fm))
+
+
 
 //*****************************************************************************
 // Conditional Lists
@@ -528,27 +474,15 @@ export const addErrCodeIf = curry(async ($conditions, $code, $fm) => {
 //   returns true if all preds pass, otherwise false
 //   accomadates mixture of sycn and async functions in the list
 export const checkPredList = curry(async ($predList, $fm) => {
-  if (_shouldReflect($fm, $predList) ) return $fm
   const predList = _extractList($predList)
-  const results = await Promise.all(predList.map(
-    async pred => {
-      console.log('pred: ', pred)
-      console.log('pred.isFonadOperator: ', pred.isFonadOperator)
-      console.log('isFonadOperator(pred): ', isFonadOperator(pred))
-      const predRes = await chain(pred, $fm)
-      console.log('predRes: ', predRes)
-      const toReturn = ( // TODO: check this logic over carefully!
-        isNotFonadOperator(pred) && isFault(predRes) ? predRes :
-        isFonadOperator(pred) ? !!predRes :
-        !!extract(predRes)
-      )
-      console.log('toReturn: ', toReturn)
-      return toReturn
-    }
-  ))
-  console.log('results: ', results)
+  const results = await Promise.all(predList.map(async pred => !!(await chain(pred, $fm))))
   const fault = find(isFault, results)
-  return fault || !any(isFalsy, results)
+  if (fault) {
+    console.warn("Warning: pred function faulted in checkPredList(), returning false")
+    logStatus(fault)
+    return false
+  }
+  return !any(isFalsy, results)
 })
 
 // check
@@ -562,6 +496,7 @@ export const checkPredList = curry(async ($predList, $fm) => {
 //   The $conditions can be any combination of the hard condition, sync pred, and asycn pred
 //   If any of the preds throws/rejects/faults, returns fauls, and logs a wrning
 export const check = async ($conditions, fm) => {
+  console.log('~~> check()')
   const conditions = _extractList($conditions)
   const hardConditions = (await Promise.all(
     conditions.filter(isNotFunction)
@@ -569,7 +504,11 @@ export const check = async ($conditions, fm) => {
   const preds = conditions.filter(isFunction)
   const hardPass = isNilOrEmpty(hardConditions) || !any(isFalsy, hardConditions)
   const predPass =  isNilOrEmpty(preds) || await checkPredList(preds, fm)
-  return isFault(predPass) || (hardPass && predPass)
+  console.log('hardPass: ', hardPass)
+  console.log('predPass: ', predPass)
+  console.log('<~~ check(): ', hardPass && predPass)
+
+  return hardPass && predPass
 }
 
 //*****************************************************************************
@@ -581,13 +520,18 @@ export const check = async ($conditions, fm) => {
 //   If any of the function calls returns a Fault, that fault is returned
 //   truthy | pred() | [ truthy &/or preds] -> $fm -> $fm | F
 export const callIf = curry(async ($conditions, $fnOrFnList, $fm) => {
-  if (_shouldReflect($fm, $fnOrFnList, )) return $fm
+  console.log('~~> callIf()')
+  if (_shouldReflect($fnOrFnList, $fm)) return $fm
   const shouldCall = await check($conditions, $fm)
-  return (
-    isFault(shouldCall) ? shouldCall :
-    shouldCall ? call($fnOrFnList, $fm) :
+  console.log('shouldCall: ', shouldCall)
+  const callIfToRet = shouldCall ?
+    call($fnOrFnList, $fm) :
     $fm
-  )
+  // if (await check($conditions, $fm)) return call($fnOrFnList, $fm)
+  // return $fm
+  // console.log('callIfToRet: ', callIfToRet)
+  console.log('<~~ callIf(): ', callIfToRet)
+  return callIfToRet
 })
 
 // callMethodIf (FOP | NJR)
@@ -596,12 +540,8 @@ export const callIf = curry(async ($conditions, $fnOrFnList, $fm) => {
 //  ifIsNotFunc(condnOrPred) calls method if condnOrPred itself is true
 export const callMethodIf = curry(async ($conditions, $method, $args, $fm) => {
   if (isNonJustFm($fm)) return $fm
-  const shouldCall = await check($conditions, $fm)
-  return (
-    isFault(shouldCall) ? shouldCall :
-    shouldCall ? callMethod($method, $args, $fm) :
-    $fm
-  )
+  if (await check($conditions, $fm)) return callMethod($method, $args, $fm)
+  return $fm
 })
 
 export const callOnFault = curry(($fnOrFnList, maybeFault) => {
@@ -610,39 +550,27 @@ export const callOnFault = curry(($fnOrFnList, maybeFault) => {
   const allFonadOperators = all(isFonadOperator, fnList)  // all fns must be fonadic operators
   return allFonadOperators ?
     _call(fnList, maybeFault) :
-    Fault({op: 'callOnFault()', msg: 'all fns in fnList must be fonad operators'}) // ?????
+    Fault({op: 'callOnFault()', msg: 'all fns in fnList must be fonad operators'})
 })
 
 // will handle async preds
 export const passthroughIf = curry(async ($conditions, $fm) => {
+  console.log('~~> passthroughIf()')
   const shouldPassThrough = await check($conditions, $fm)
-  return (
-    isFault(shouldPassThrough) ? shouldPassThrough :
-    shouldPassThrough ? Passthrough($fm) :
-    $fm
-  )
+  console.log('shouldPassThrough: ', shouldPassThrough)
+  const passthroughIfToRet = (shouldPassThrough ? Passthrough($fm) : $fm)
+  console.log('<~~ passthroughIf(): ', passthroughIfToRet)
+  // return (shouldPassThrough ? Passthrough($fm) : $fm)
+  // return (await check($conditions, $fm) ? Passthrough($fm) : $fm)
 })
 
 
 export const returnIf = passthroughIf
 
-// TODO: doc and test
-export const returnValIf = curry(async ($conditions, toReturn, $fm) => {
-  const shouldPassThrough = await check($conditions, $fm)
-  return (
-    isFault(shouldPassThrough) ? shouldPassThrough :
-    shouldPassThrough ? Passthrough(toReturn) :
-    $fm
-  )
-})
-
-
 // TODO: test
 // Will transfer any notes from an incoming FM
 export const faultIf = curry(async ($conditions, faultOptions, $fm) => {
-  const shouldFault = await check($conditions, $fm)
-  if (isFault(shouldFault)) return shouldFault
-  if (shouldFault) {
+  if (await check($conditions, $fm)) {
     const fault = Fault(faultOptions)
     if ( isFm($fm) && $fm._notes.length) fault._setNotes($fm._notes)
     return fault
@@ -650,54 +578,55 @@ export const faultIf = curry(async ($conditions, faultOptions, $fm) => {
   return $fm
 })
 
+// TODO: test very well, better docs
+// TODO: reaxify, use forEach instead of for loop
+// TODO: take in list of preds as well as pred
+// Recieves fm and a predicated action list: [ [p1,a1a,a1b,...], [p2,a2a,a2b,...], ... ]
+//   predActions[0] = predicate.  Will be mapped over fm as fm -> bool.  Example predicates: isJust, isOk, isFault, isNil, etc.
+//   predActions[1..n] = list of fxns to pipe together, with fm as input, if predActions[0] evalues to true
+//     pipe(predActions[1], predActions[2], ...)(fm).
+// For the first predicate that evalutes to true, predActions[1..n] are piped together and the result is returned
+// You can use orElse as a predicate for the last entry in the list to define default behaviour
+// If none of the predicates evalute to true, an exception is thrown if `exceptionOnNoMatch`, otherwise fm is returned
+// bool -> [ [p1,a1], [p2,a2], ... ] -> fm -> F | a
+const _caseOfOld = (exceptionOnNoMatch, predActions, $fm ) => {
+  const fm = extract($fm)
+  for (let i = 0; i < predActions.length; i++) {
+    const pred = predActions[i][0];
+    const actionList = drop(1,predActions[i])
+    if (pred(fm)) {
+      return pipe(...actionList)(fm);
+    }
+  }
+  throwIf(exceptionOnNoMatch, `caseOf() did not find match for monad: ${fm}`);
+  return fm;
+}
+
 // TODO: get elseif in place
 // TODO: should this be a pipe or passthrough? ... maybe make an option
-// export const caseOf = curry(async ($predActionList, $fm) => {
-//   console.log('$fm: ', $fm)
-//   const predActionList = _extractList($predActionList)
-//   for (let i = 0; i < predActionList.length; i++) {
-//     console.log('------------------------- caseOf ', i)
-//     let conditions = prop('if', predActionList[i])
-//     if (!conditions) conditions = prop('elseIf', predActionList[i])
-//     let actionList = propOr([], 'then', predActionList[i])
-//     if (!conditions) {
-//       const elsePreds = prop('else', predActionList[i])
-//       if (elsePreds) {
-//         conditions = true;
-//         actionList = flatArrayify(elsePreds)
-//       }
-//     }
-//     const shouldExecute = await check(conditions, $fm)
-//     console.log('shouldExecute: ', i, shouldExecute)
-//     if (isFault(shouldExecute)) return shouldExecute
-//     if (shouldExecute) return pipeAsync(...flatArrayify(actionList))($fm)
-//   }
-//   return $fm;
-// })
-
-// case of [
-//   [ conditions, actions ],
-//   [ conditions, actions ],
-//   [ conditions, actions ]
-// ]
-export const caseOf = curry(async (predActionList, $fm) => {
-  console.log('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~> caseOf()')
+const _caseOf = async (throwOnNoMatch, $predActionList, $fm) => {
+  const predActionList = _extractList($predActionList)
   for (let i = 0; i < predActionList.length; i++) {
-    // console.log('predActionList: ', i, predActionList)
-    // console.log('predActionList[i].length: ', predActionList[i].length)
-    // console.log('predActionList[i][0]: ', predActionList[i][0])
-    const conditions = predActionList[i][0]
-    // console.log('conditions.isFonadOperator:: ', conditions.isFonadOperator)
-    const actions = flatArrayify(predActionList[i][1])
-    // console.log('conditions: ', conditions)
-    const shouldExecute = await check(conditions, $fm)
-    // console.log('shouldExecute: ', i, shouldExecute)
-    if (isFault(shouldExecute)) return shouldExecute
-    if (shouldExecute) return pipeAsync(...actions)($fm)
+    let conditions = prop('if', predActionList[i])
+    if (!conditions) conditions = prop('elseIf', predActionList[i])
+    let actionList = flatArrayify(propOr([], 'then', predActionList[i]))
+    if (!conditions) {
+      const elsePreds = prop('else', predActionList[i])
+      if (elsePreds) {
+        conditions = true;
+        actionList = elsePreds
+      }
+    }
+    if(await check(conditions, $fm)) {
+      return pipeAsync(...actionList)($fm)
+    }
   }
+  throwIf(throwOnNoMatch, `caseOf() did not find match for fonad: ${$fm}`);
   return $fm;
-})
+}
 
+export const caseOfStrict = curry((predActions, fm) => _caseOf(true, predActions, fm)); // throws exception upon no match
+export const caseOf = curry((predActions, fm) => _caseOf(false, predActions, fm)); // returns fm upon no match
 
 // Use with CaseOf as a fallback predicate action
 export const orElse = () => true
@@ -713,18 +642,8 @@ export const fIsArray = $fm => isArray(extract($fm))
 export const fEq = curry(($val, $fm) => extract($val) === extract($fm))
 export const fProp = curry(($propName, $fm) => prop(extract($propName), extract($fm)))
 
-export const fIsTrue = $fm =>
-  isNonJustFm($fm) ? $fm : extract($fm) === true
-
-export const fIsFalse = $fm =>
-  isNonJustFm($fm) ? $fm : extract($fm) === false
-
-
-export const fIncludes = curry(($val, $fmList) => {
-  if (isNonJustFm($fmList)) return $fmList
-  const fault = find(isFault, _extractList($fmList)) // ??
-  return fault || Just(fIsArray($fmList) && includes(extract($val), extract($fmList)))
-})
+export const fIncludes = curry(($val, $fmList) =>
+  Just(fIsArray($fmList) && includes(extract($val), extract($fmList))))
 
 //*****************************************************************************
 // Logging and messaging
@@ -754,14 +673,8 @@ export const logMsg = curry(($msg, fm) => {
   return fm
 })
 
-export const logMsgIf = curry(async ($conditions, $msg, $fm) => {
-  const shouldLog = await check($conditions, $fm)
-  return (
-    isFault(shouldLog) ? shouldLog :
-    shouldLog ? logMsg(extract($msg), $fm) :
-    $fm
-  )
-})
+export const logMsgIf = curry(async ($conditions, $msg, $fm) =>
+  (await check($conditions, $fm) ? logMsg(extract($msg), $fm) : $fm))
 
 // log (PT)
 //   Log and return fmOrVal.
@@ -774,12 +687,8 @@ export const log = fmOrVal => {
 }
 
 export const logIf = curry(async ($conditions, $fm) => {
-  const shouldLog = await check($conditions, $fm)
-  return (
-    isFault(shouldLog) ? shouldLog :
-    shouldLog ? log($fm) :
-    $fm
-  )
+  await check($conditions, $fm) && log($fm)
+  return $fm
 })
 
 // logRaw (PT)
@@ -803,17 +712,6 @@ export const logWithMsg = curry(($msg, fmOrVal) => {
   console.log(extract($msg))
   return log(fmOrVal)
 })
-
-export const logType = $fm => {
-  console.log(isFm($fm) ? $fm._type : 'Non FM' )
-  return $fm
-}
-
-export const logTypeWithMsg = curry(($msg, $fm) => {
-  console.log(extract($msg))
-  return logType($fm)
-})
-
 
 // reflectivly log an S's status msg
 export const logStatus = fm => {
