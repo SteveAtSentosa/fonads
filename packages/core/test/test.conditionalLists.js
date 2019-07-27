@@ -1,20 +1,26 @@
 import { expect } from 'chai'
 import { equals, lt, gt } from 'ramda'
-import { isPromise, isTrue, isFalse } from 'ramda-adjunct'
+import { isPromise, isTrue, isFalse, isString, noop } from 'ramda-adjunct'
 import {
-  testJust, testOk,
-  asyncResolve, returnsTrue, returnsFalse, returnsTrueAsync, returnsJustTrue, returnsJustFalse,
+  testJust, testOk, testFault,
+  asyncResolve, returnsTrue, returnsFalse, returnsTrueAsync, returnsJustTrue, returnsJustFalse, throws, asyncThrow,
   returnsJustTrueAsync, returnsJustFalseAsync, returnsFalseAsync, asyncEq, asyncGt, asyncLt, asyncIsJust,
-  truePromise, justTruePromise, falsePromise, justFalsePromise, returnsTruePromise
+  truePromise, justTruePromise, falsePromise, justFalsePromise, returnsTruePromise, asyncReject,
+  returnsFault, returnsJust, returnsOk, returnsNothing, returnsPassthrough, returnsFaultAsync,
+  isTrueAsync, isFalseAsync
 } from './testHelpers'
 import {
-  Just, check, checkPredList,
+  Just, Nothing, Ok, Fault, Passthorugh, check, checkPredList,
   isFm, isJust, isNotJust, isNotFault, isNotFm, isOk,
+  getExceptionMsg
 } from '../src/fonads'
 
 export default function runConditionalListTests() {
   describe('conditional list tests', () => {
-    testPredLists()
+    testPredListsSync()
+    testPredListsAsync()
+    testPredListsMixed()
+    testPredListsReflection()
     testConditionListsHard()
     testConditionListsSync()
     testConditionListsAsync()
@@ -24,13 +30,10 @@ export default function runConditionalListTests() {
   })
 }
 
-const testPredLists = () => {
-  it('should evaluate pred lists correctly', async () => {
-
-    // sycn preds only
+const testPredListsSync = () => {
+  it('should evaluate sync pred lists correctly', async () => {
 
     const justTrue = Just(true)
-    const justFalse = Just(false)
     const dummy = 'dummy'
 
     let res = checkPredList(isTrue, true)
@@ -60,13 +63,18 @@ const testPredLists = () => {
     res = checkPredList([isFalse, isTrue, isFalse], justTrue)
     expect(isPromise(res)).to.equal(true)
     expect(await res).to.equal(false)
+  })
+}
 
-    // async preds only
 
-    const isTrueAsync = v => asyncResolve(isTrue(v))
-    const isFalseAsync = v => asyncResolve(isFalse(v))
+const testPredListsAsync = () => {
+  it('should evaluate async pred lists correctly', async () => {
 
-    res = checkPredList(isTrueAsync, true)
+    const justTrue = Just(true)
+    const justFalse = Just(false)
+    const dummy = 'dummy'
+
+    let res = checkPredList(isTrueAsync, true)
     expect(isPromise(res)).to.equal(true)
     expect(await res).to.equal(true)
 
@@ -101,11 +109,15 @@ const testPredLists = () => {
     res = checkPredList([isFalseAsync, isTrueAsync, isFalseAsync], justFalse)
     expect(isPromise(res)).to.equal(true)
     expect(await res).to.equal(false)
+  })
+}
 
+const testPredListsMixed = () => {
+  it('should evaluate mixed pred lists correctly', async () => {
 
-    // mixture
+    const justTrue = Just(true)
 
-    res = checkPredList([isFalseAsync, isFalse, isFalseAsync], false)
+    let res = checkPredList([isFalseAsync, isFalse, isFalseAsync], false)
     expect(isPromise(res)).to.equal(true)
     expect(await res).to.equal(true)
 
@@ -121,12 +133,38 @@ const testPredLists = () => {
     expect(isPromise(res)).to.equal(true)
     expect(await res).to.equal(false)
   })
+}
 
-  xit('should test hard conditions enclosed by a promise')
+const testPredListsReflection = () => {
+  it('should evaluate preds that return fonads correctly', async () => {
+
+    const just = Just('hanging out')
+
+    // fonad returned by pred
+
+    let res = checkPredList(returnsNothing, just)
+    let resolvedRes = await res
+    expect(isPromise(res)).to.equal(true)
+    expect(resolvedRes).to.equal(false)
+
+    res = checkPredList(returnsPassthrough, just)
+    resolvedRes = await res
+    expect(isPromise(res)).to.equal(true)
+    expect(resolvedRes).to.equal(false)
+
+    res = checkPredList(returnsOk, just)
+    resolvedRes = await res
+    expect(isPromise(res)).to.equal(true)
+    expect(resolvedRes).to.equal(true)
+
+    res = checkPredList(returnsFault, just)
+    resolvedRes = await res
+    expect(isPromise(res)).to.equal(true)
+    expect(resolvedRes).to.equal(testFault)
+  })
 }
 
 const testConditionListsHard = () => {
-
   it('should evaluate hard condition lists correctly', async () => {
 
     const dummy = 'dummy'
@@ -313,5 +351,77 @@ const testConditionListsMixed = () => {
   })
 }
 
-const testPredListFaults = () => xit('should tests pred list faults')
-const testConditionListFaults = () => xit('should tests conditional list faults')
+const testPredListFaults = () => {
+  it('should handle preds that return faults correctly', async () => {
+
+    // fault
+
+    let res = checkPredList([isFalseAsync, returnsFault, isFalseAsync], false)
+    let resolvedRes = await res
+    expect(isPromise(res)).to.equal(true)
+    expect(resolvedRes).to.equal(testFault)
+
+    res = checkPredList([returnsFaultAsync, returnsTrue, returnsFalseAsync], false)
+    resolvedRes = await res
+    expect(isPromise(res)).to.equal(true)
+    expect(resolvedRes).to.equal(testFault)
+
+    // Throw
+
+    res = checkPredList(throws, 'any')
+    resolvedRes = await res
+    expect(isPromise(res)).to.equal(true)
+    expect(getExceptionMsg(resolvedRes)).to.equal('thrown')
+
+    checkPredList([returnsTrue, returnsFalseAsync, isString,  asyncThrow], 'any')
+    resolvedRes = await res
+    expect(isPromise(res)).to.equal(true)
+    expect(getExceptionMsg(resolvedRes)).to.equal('thrown')
+
+    // reject
+
+    res = checkPredList([isTrue, returnsTrue, asyncReject], 'any')
+    resolvedRes = await res
+    expect(isPromise(res)).to.equal(true)
+    expect(getExceptionMsg(resolvedRes)).to.equal('rejected')
+  })
+}
+
+
+
+const testConditionListFaults = () => {
+  it('should handle preds that return faults correctly', async () => {
+
+    // fault
+
+    let res = check([returnsFault, returnsTrue, true, returnsTrueAsync, false, asyncIsJust], Just(99))
+    let resolvedRes = await res
+    expect(isPromise(res)).to.equal(true)
+    expect(resolvedRes).to.equal(testFault)
+
+
+    res = check([returnsTrue, true, returnsTrueAsync, returnsFaultAsync, Just(false), asyncIsJust], Just(99))
+    resolvedRes = await res
+    expect(isPromise(res)).to.equal(true)
+    expect(resolvedRes).to.equal(testFault)
+
+    // Throw
+
+    res = check([lt(50), lt(75), returnsJustTrue, throws], 99)
+    resolvedRes = await res
+    expect(isPromise(res)).to.equal(true)
+    expect(getExceptionMsg(resolvedRes)).to.equal('thrown')
+
+    res = check([asyncThrow, returnsTrue, returnsTrueAsync, returnsFalseAsync, asyncIsJust], Just(99))
+    expect(isPromise(res)).to.equal(true)
+    resolvedRes = await res
+    expect(getExceptionMsg(resolvedRes)).to.equal('thrown')
+
+    // reject
+    res = check([equals(99), true, asyncEq(99), returnsTrue, asyncReject, true, returnsTrueAsync], 100)
+    expect(isPromise(res)).to.equal(true)
+    resolvedRes = await res
+    expect(getExceptionMsg(resolvedRes)).to.equal('rejected')
+  })
+}
+

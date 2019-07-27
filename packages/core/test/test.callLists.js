@@ -65,7 +65,7 @@ const testCallListAsync = () => {
     fnList = [ asyncFault, asyncResolve, asyncResolve ]
     const faultRes = call(fnList, just)
     expect(isPromise(faultRes)).to.equal(true)
-    expect(isFault(await faultRes)).to.equal(testFault)
+    expect(isFault(await faultRes)).to.equal(true)
     expect(extract(just)).to.equal(5)
 
     just = Just(6)
@@ -99,14 +99,14 @@ const testCallListMixed = () => {
     fnList = [ asyncFault, asyncResolve, asyncResolve ]
     let faultRes = call(fnList, just)
     expect(isPromise(faultRes)).to.equal(true)
-    expect(isFault(await faultRes)).to.equal(testFault)
+    expect(isFault(await faultRes)).to.equal(true)
     expect(extract(just)).to.equal(55)
 
     just = Just(555)
     fnList = [ double, returnsFault, asyncResolve ]
     faultRes = call(fnList, just)
     expect(isPromise(faultRes)).to.equal(true)
-    expect(isFault(await faultRes)).to.equal(testFault)
+    expect(isFault(await faultRes)).to.equal(true)
     expect(extract(just)).to.equal(555)
 
     just = Just(66)

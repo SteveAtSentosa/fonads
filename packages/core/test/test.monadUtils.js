@@ -142,13 +142,6 @@ const testValueExtraction = () => {
 }
 
 const testNotes = () => {
-  it('should identify itself as a fonad operator', () => {
-    expect(addNote.isFonadOperator).to.equal(true)
-    const partialAddNote = addNote('partial')
-    expect(isFunction(partialAddNote)).to.equal(true)
-    expect(partialAddNote.isFonadOperator).to.equal(true)
-  })
-
   it('should append notes correctly', () => {
     const testOk = Ok()
     const testNothing = Nothing()

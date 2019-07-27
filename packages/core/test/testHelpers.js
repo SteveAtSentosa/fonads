@@ -1,4 +1,5 @@
 import { curry, equals, lt, gt } from 'ramda'
+import { isTrue, isFalse } from 'ramda-adjunct'
 import { Just, Ok, Fault, Nothing, Passthrough, fCurry, isJust, isNotJust } from '../src/fonads'
 import { addNote, extract } from '../src/fonads'
 
@@ -9,11 +10,28 @@ export const testJust = Just(99)
 export const testRaw = 'raw'
 export const testPassthrough = Passthrough(testJust)
 
+export const testOkPromise = Promise.resolve(testOk)
+export const testNothingPromise = Promise.resolve(testNothing)
+export const testFaultPromise = Promise.resolve(testFault)
+export const testJustPromise = Promise.resolve(testJust)
+export const testRawPromise = Promise.resolve(testRaw)
+export const testPassthroughPromise = Promise.resolve(testPassthrough)
+
+// experimental
+export const returnsFault = fCurry(() => testFault, { fonadUpdater: 'returnsFault' })
+export const returnsJust = fCurry(() => testJust, { fonadUpdater: 'returnsJust' })
+export const returnsOk = fCurry(() => testOk, { fonadUpdater: 'returnsOk' })
+export const returnsNothing = fCurry(() => testNothing, { fonadUpdater: 'returnsNothing' })
+export const returnsPassthrough = fCurry(() => testPassthrough, { fonadUpdater: 'returnsPassthrough' })
+
+export const returnsFaultAsync = fCurry(() => asyncResolve(testFault), { fonadUpdater: 'returnsFaultAsync' })
+export const returnsJustAsync = fCurry(() => asyncResolve(testJust), { fonadUpdater: 'returnsJustAsync' })
+export const returnsOkAsync = fCurry(() => asyncResolve(testOk), { fonadUpdater: 'returnsNothingAsync' })
+export const returnsNothingAsync = fCurry(() => asyncResolve(testNothing), { fonadUpdater: 'returnsNothingAsync' })
+export const returnsPassthroughAsync = fCurry(() => asyncResolve(testPassthrough), { fonadUpdater: 'returnsPassthroughAsync' })
+
 export const allGood = () => 'all good'
-export const returnsFault = () => testFault
-export const throws = () => {
-  throw new Error('thrown')
-}
+export const throws = fCurry(() => { throw new Error('thrown') }, { fonadUpdater: 'throws' })
 
 export const doit = true
 export const bail = false
@@ -58,7 +76,7 @@ export const asyncDouble = v => asyncResolve(2*v)
 export const asyncTriple = v => asyncResolve(3*v)
 export const asyncQuad = v => asyncResolve(4*v)
 export const asyncSquare = v => asyncResolve(v*v)
-export const asyncAddNote = fCurry((note, fm) => asyncResolve(addNote(note, fm)))
+export const asyncAddNote = fCurry((note, fm) => asyncResolve(addNote(note, fm)), { fonadUpdater: 'asyncAddNote' })
 
 export const returnsTrue = () => true
 export const returnsFalse = () => false
@@ -73,15 +91,20 @@ export const returnsJustFalse = () => Just(false)
 export const returnsJustTrueAsync = () => asyncResolve(Just(true))
 export const returnsJustFalseAsync = () => asyncResolve(Just(false))
 
-
 export const asyncEq = curry((a, b) => asyncResolve(equals(a,b)))
 export const asyncLt = curry((a, b) => asyncResolve(lt(a,b)))
 export const asyncGt = curry((a, b) => asyncResolve(gt(a,b)))
 
-export const asyncIsJust = fm => asyncResolve(isJust(fm))
-asyncIsJust.isFonadOperator = true // (faking this for testing)
-export const asyncIsNotJust = fm => asyncResolve(isNotJust(fm))
-asyncIsNotJust.isFonadOperator = true // (faking this for testing)
+export const isTrueAsync = v => asyncResolve(isTrue(v))
+export const isFalseAsync = v => asyncResolve(isFalse(v))
+
+export const asyncIsJust = fCurry(fm => asyncResolve(isJust(fm)), { fonadQuery: 'asyncIsJust' })
+export const asyncIsNotJust = fCurry(fm => asyncResolve(isNotJust(fm)), { fonadQuery: 'asyncIsNotJust' })
+
+// export const asyncIsJust = fm => asyncResolve(isJust(fm))
+// asyncIsJust.isFonadOperator = true // (faking this for testing)
+// export const asyncIsNotJust = fm => asyncResolve(isNotJust(fm))
+// asyncIsNotJust.isFonadOperator = true // (faking this for testing)
 
 // respolved with v
 export const asyncResolve = v =>
@@ -102,16 +125,26 @@ export const asyncReject = a =>
     }, 10),
   )
 
+asyncReject.fonadQuery = 'asyncReject' // TODO: hack until I figure out the below
+// why is this not working?
+// export const asyncReject = fCurry(a =>
+//   new Promise((resolve, reject) =>
+//     setTimeout(() => {
+//       reject(new Error('rejected'))
+//     }, 10),
+//   ))
+
+
 export const timeout = () =>
   new Promise(resolve => {
     setTimeout(resolve, 5)
   })
 
 // throws 'thrown'
-export const asyncThrow = async ms => {
+export const asyncThrow = fCurry(async (ms = 5)  => {
   await timeout(ms)
   throw new Error('thrown')
-}
+}, { fonadQuery: 'asyncThrow' })
 
 export class Async {
   resolve(msg) {
@@ -144,7 +177,7 @@ export class AddAsync {
   setVal(v) {this.val += v; return asyncResolve(this.val) }
   getVal() { return asyncResolve(this.val) }
   reset() { this.val = 0; return asyncResolve(this.val) }
-  throw() { asyncThrow()}
+  throw() { asyncThrow() }
   fault() { return asyncFault() }
   reject() { return asyncReject() }
 }

@@ -5,9 +5,12 @@ import { reflect } from '../src/utils/fn'
 import { Just, Ok, Nothing, Passthrough, Fault, isJust, isFault } from '../src/fonads'
 import { extract, map, chain, mapMethod, getNotes } from '../src/fonads'
 import { call, callMethod } from '../src/fonads'
+import {
+  testOkPromise, testNothingPromise, testFaultPromise, testJustPromise, testRawPromise, testPassthroughPromise
+} from './testHelpers'
 
 import {
-  testOk, testNothing, testFault, testJust, testRaw,double, triple, quad, asyncAddNote,
+  testOk, testNothing, testFault, testJust, testRaw, double, triple, quad, asyncAddNote, AddAsync, fDoubleAsync, fSquareAsync,
   asyncResolve, asyncFault, asyncReject, asyncThrow, Add, Async, allGood, returnsFault, throws
 } from './testHelpers'
 
@@ -17,12 +20,10 @@ export default function runFonadInterfaceTests() {
     testChainAsync()
     testMap()
     testMapAsync()
-    testMapAsyncFonadOperator()
     testMapMethod()
     testMapMethodAsync()
     testCall()
     testCallAsync()
-    testCallAsyncFonadOperator()
     testCallMethod()
     testCallAsyncMethod()
   })
@@ -45,6 +46,11 @@ const testChain = () => {
     expect(chain(noop, nothing)).to.equal(nothing)
     expect(chain(noop, passthrough)).to.equal(passthrough)
   })
+  it('should chain promise(fm) correctly', async () => {
+    expect(await chain(triple, testJustPromise)).to.equal(297)
+    expect(await map(triple, testFaultPromise)).to.equal(testFault)
+  })
+  it('should test more chain promise(fm) cases')
 }
 
 const testMap = () => {
@@ -70,8 +76,13 @@ const testMap = () => {
     const mapFault = map(throwE, justOne)
     expect(isFault(mapFault)).to.satisfy(isTruthy)
   })
-}
 
+  it('should map promise(fm) correctly', async () => {
+    expect(await map(double, testJustPromise)).property('_val', 198)
+    expect(await map(double, testFaultPromise)).to.equal(testFault)
+  })
+  xit('should test more map promise(fm) cases')
+}
 
 const testMapAsync = () => {
   it('should map async functions correctly', async () => {
@@ -125,6 +136,14 @@ const testMapAsync = () => {
     const reflectedFault = await curriedResolver(testFault)
     expect(reflectedFault).to.equal(testFault)
   })
+
+  // promises
+
+  it('should aync map promise(fm) correctly', async () => {
+    expect(await map(fDoubleAsync, testJustPromise)).property('_val', 198)
+    expect(await map(fDoubleAsync, testFaultPromise)).to.equal(testFault)
+  })
+  xit('should test more async map promise(fm) cases')
 }
 
 const testChainAsync = () => {
@@ -179,6 +198,11 @@ const testChainAsync = () => {
     const reflectedFault = await curriedResolver(testFault)
     expect(reflectedFault).to.equal(testFault)
   })
+  it('should aync chain promise(fm) correctly', async () => {
+    expect(await chain(fSquareAsync, testJustPromise)).to.equal(9801)
+    expect(await map(fSquareAsync, testFaultPromise)).to.equal(testFault)
+  })
+  xit('should test more async map promise(fm) cases')
 }
 
 const testMapMethod = () => {
@@ -211,6 +235,16 @@ const testMapMethod = () => {
     expect(isFault(mapMethod('throw', [], justAdd))).to.satisfy(isTruthy)
     expect(mapMethod('fault', [], justAdd)).to.equal(testFault)
   })
+  it('should mapMethod promise(fm) correctly', async () => {
+    const justAddPromise = Promise.resolve(Just(new Add()))
+    let res = await mapMethod('three', [2, 4, 6], justAddPromise)
+    expect(isJust(res)).to.equal(true)
+    expect(extract(res)).to.equal(12)
+
+    res = await mapMethod('three', [2, 4, 6], testFaultPromise)
+    expect(res).to.equal(testFault)
+  })
+  xit('should test more mapMethod promise(fm) cases')
 }
 
 const testMapMethodAsync = () => {
@@ -255,6 +289,17 @@ const testMapMethodAsync = () => {
     expect(isFault(await mapMethod('nonFn', [], { nonFn: [] }))).to.satisfy(isTruthy)
     expect(isFault(await mapMethod('nonFn', [], { nonFn: {} }))).to.satisfy(isTruthy)
   })
+
+  it('should async mapMethod promise(fm) correctly', async () => {
+    const justAddAsyncPromise = Promise.resolve(Just(new AddAsync()))
+    let res = await mapMethod('three', [5, 10, 15], justAddAsyncPromise)
+    expect(isJust(res)).to.equal(true)
+    expect(extract(res)).to.equal(30)
+
+    res = await mapMethod('three', [5, 10, 15], testFaultPromise)
+    expect(res).to.equal(testFault)
+  })
+  xit('should test more async mapMethod promise(fm) cases')
 }
 
 const testCall = () => {
@@ -273,6 +318,11 @@ const testCall = () => {
     expect(call(allGood, testNothing)).to.equal(testNothing)
     expect(call(allGood, testOk)).to.equal(testOk)
   })
+  it('should map promise(fm) correctly', async () => {
+    expect(await call(double, testJustPromise)).to.equal(testJust)
+    expect(await call(double, testFaultPromise)).to.equal(testFault)
+  })
+  xit('should test more call promise(fm) cases')
 }
 
 const testCallAsync = () => {
@@ -333,28 +383,13 @@ const testCallAsync = () => {
     const reflectedFault = await curriedResolver(testFault)
     expect(reflectedFault).to.equal(testFault)
   })
-}
 
-const testMapAsyncFonadOperator = () => {
-  it('should map async fonad opertators correctly', async () => {
-    const just = Just('anything')
-    const res = map(asyncAddNote('async op note'), just)
-    expect(isPromise(res)).to.equal(true)
-    expect(await res).to.equal(just)
-    expect(getNotes(await res)).to.deep.equal(['async op note'])
+  it('should async call promise(fm) correctly', async () => {
+    expect(await call(fDoubleAsync, testJustPromise)).to.equal(testJust)
+    expect(await call(fDoubleAsync, testFaultPromise)).to.equal(testFault)
   })
+  xit('should test more async map promise(fm) cases')
 }
-
-const testCallAsyncFonadOperator = async () => {
-  it('should call async fonad opertators correctly', async () => {
-    const just = Just('another just')
-    const res = call(asyncAddNote('async op call note'), just)
-    expect(isPromise(res)).to.equal(true)
-    expect(await res).to.equal(just)
-    expect(getNotes(await res)).to.deep.equal(['async op call note'])
-  })
-}
-
 
 const testCallMethod = () => {
   it('should FOP call methods correctly', () => {
@@ -386,6 +421,17 @@ const testCallMethod = () => {
     expect(isFault(callMethod('throw', [], justAdd))).to.satisfy(isTruthy)
     expect(isFault(callMethod('fault', [], justAdd))).to.satisfy(isTruthy)
   })
+
+  it('should callMethod promise(fm) correctly', async () => {
+    const justAdd = Just(new Add())
+    const justAddPromise = Promise.resolve(justAdd)
+    let res = await callMethod('three', [5, 10, 15], justAddPromise)
+    expect(res).to.equal(justAdd)
+
+    res = await callMethod('three', [5, 10, 15], testFaultPromise)
+    expect(res).to.equal(testFault)
+  })
+  xit('should test more callMethod promise(fm) cases')
 }
 
 const testCallAsyncMethod = () => {
@@ -429,5 +475,30 @@ const testCallAsyncMethod = () => {
     expect(isFault(await callMethod('nonFn', [], { nonFn: [] }))).to.satisfy(isTruthy)
     expect(isFault(await callMethod('nonFn', [], { nonFn: {} }))).to.satisfy(isTruthy)
   })
+
+
+  xit('should async callMethod promise(fm) correctly', async () => {
+    // const justAddAsync = Just(new AddAsync())
+    // const justAddAsyncPromise = Promise.resolve(justAddAsync)
+    // let res = await mapMethod('three', [5, 10, 15], justAddAsyncPromise)
+    // expect(res).to.equal(justAdd)
+    // console.log('res: ', res)
+
+
+    // const justAdd = Just(new Add())
+    // const justAddAsyncPromise = Promise.resolve(justAdd)
+
+    // const justAddAsyncPromise = Promise.resolve(Just(new AddAsync()))
+    // let res = await callMethod('three', [5, 10, 15], justAddAsyncPromise)
+    // expect(res).to.equal(just)
+
+    // res = await mapMethod('three', [5, 10, 15], testFaultPromise)
+    // expect(res).to.equal(testFault)
+  })
+  xit('should test more async callMethod promise(fm) cases')
+
+
+
+
 }
 

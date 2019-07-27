@@ -1,17 +1,19 @@
 import { expect } from 'chai'
-import { isPromise, isTruthy, noop } from 'ramda-adjunct'
+import { isPromise, isTruthy, noop, isTrue } from 'ramda-adjunct'
 import {
   Fault, Just,  isFault, isJust,
-  callIf, callMethodIf, callOnFault, passthroughIf, faultIf, caseOf, orElse, addNote, getNotes, getExceptionMsg,
-  mapMethod, chainMethod, extract, fEq, reflect
+  callIf, callMethodIf, callOnFault, passthroughIf, faultIf, caseOf, orElse, addNote,
+  getNotes, getExceptionMsg, mapMethod, chainMethod, extract, fEq, reflect, isPassthrough,
+  returnValIf,
 } from '../src/fonads'
 import {
-  returnsTrue, returnsFalse, returnsTrueAsync, returnsTruePromise,  truePromise, returnsFalseAsync, asyncSquare, asyncIsJust, asyncIsNotJust,
+  returnsTrue, returnsFalse, returnsTrueAsync, returnsTruePromise,  truePromise,
+  returnsFalseAsync, asyncSquare, asyncIsJust, asyncIsNotJust,
   double, fDouble, fTriple, fDoubleAsync, fTripleAsync, fQuadAsync,
   getMe, clearMe, setMe, doubleMe, squareMe, asyncSquareMe, doit, bail,
   asyncAddNote, asyncFault, testFault, testJust,
-  returnsFault, throws, allGood, asyncThrow, asyncReject,
-  Add, AddAsync, falsePromise,
+  returnsFault, throws, allGood, asyncThrow, asyncReject, asyncResolve,
+  Add, AddAsync, falsePromise, returnsFaultAsync
 } from './testHelpers'
 
 export default function runCondtionalOperatorTests() {
@@ -20,7 +22,11 @@ export default function runCondtionalOperatorTests() {
     testCallMethodIf()
     testCallOnFault()
     testPassthroughIf()
+    testReturnIf()
+    testReturnValIf()
     testCaseOf()
+    testConditionalCombinations()
+    testFaultIf()
   })
 }
 
@@ -76,6 +82,14 @@ const testCallIf = () => {
     expect(res).to.equal(justThree)
     expect(getMe()).to.equal(null)
 
+    // promise
+
+    const justThreePromise = Promise.resolve(justThree)
+    clearMe()
+    res = await callIf([isJust, doit], [setMe, doubleMe, doubleMe], justThreePromise)
+    expect(res).to.equal(justThree)
+    expect(getMe()).to.equal(12)
+
     // fault
 
     res = await callIf(true, [setMe, returnsFault, doubleMe], justThree)
@@ -88,7 +102,7 @@ const testCallIf = () => {
 
     res = await callIf(true, [ throws, returnsFault ], justThree)
     expect(isFault(res)).to.satisfy(isTruthy)
-    expect(getExceptionMsg(await res)).to.equal('thrown')
+    expect(res).to.equal(testFault)
 
     res = await callIf(true, [ allGood, allGood, asyncThrow, allGood ], justThree)
     expect(isFault(res)).to.satisfy(isTruthy)
@@ -100,6 +114,7 @@ const testCallIf = () => {
     expect(isFault(res)).to.satisfy(isTruthy)
     expect(getExceptionMsg(await res)).to.equal('rejected')
   })
+  xit('should test more callIf promise($fm) cases')
 }
 
 const testCallMethodIf = () => {
@@ -107,8 +122,8 @@ const testCallMethodIf = () => {
 
     // sync
 
-    const rawAdd = new Add()
-    const justAdd = Just(rawAdd)
+    let rawAdd = new Add()
+    let justAdd = Just(rawAdd)
 
     let res = callMethodIf(true, 'three', [2, 4, 6], justAdd)
     expect(isPromise(res)).to.equal(true)
@@ -126,17 +141,52 @@ const testCallMethodIf = () => {
 
     // async
 
-    const rawAddAsync = new AddAsync()
-    const justAddAsync = Just(rawAddAsync)
+    let rawAddAsync = new AddAsync()
+    let justAddAsync = Just(rawAddAsync)
     res = callMethodIf(true, 'setVal', [10], justAddAsync)
     expect(isPromise(res)).to.equal(true)
     expect(await chainMethod('getVal', [], await res)).to.equal(10)
+
+    // invalid input
+
+    res = callMethodIf(true, 'xxx', [], justAddAsync)
+    let resolvedRes = await res
+    expect(isPromise(res)).to.equal(true)
+    expect(isFault(resolvedRes)).to.equal(true)
+
+    // fault
+
+    res = callMethodIf([true, returnsTrue, returnsTrueAsync], 'fault', [], justAdd)
+    resolvedRes = await res
+    expect(isPromise(res)).to.equal(true)
+    expect(resolvedRes).to.equal(testFault)
+
+    res = callMethodIf(returnsTrueAsync, 'fault', [], justAddAsync)
+    resolvedRes = await res
+    expect(isPromise(res)).to.equal(true)
+    expect(resolvedRes).to.equal(testFault)
+
+    // throw
+
+    res = callMethodIf([true, returnsTrue, returnsTrueAsync], 'throw', [], justAdd)
+    resolvedRes = await res
+    expect(isPromise(res)).to.equal(true)
+    expect(getExceptionMsg(resolvedRes)).to.equal('thrown')
+
+    // TODO: placeholder ... can I get async throw to work?
+
+    // reject
+
+    res = callMethodIf([true, returnsTrue, returnsTrueAsync], 'reject', [], justAddAsync)
+    resolvedRes = await res
+    expect(isPromise(res)).to.equal(true)
+    expect(getExceptionMsg(resolvedRes)).to.equal('rejected')
   })
-  // invalid input
-  // fault
-  // throw
-  // reject
-  xit('should test callMethodIf fault cases')
+
+  xit('should handle callMethodIf promises correctly')
+  xit('should get asycnThrow to work if possible')
+
+  // let res = callMethodIf(true, 'throw', [], justAddAsync)
 }
 
 // const testCallOnFault = () => xit('should test callOnFault')
@@ -176,12 +226,56 @@ const testCallOnFault = async () => {
 
     res = callOnFault(() => setMe(22), testFault)
     expect(isFault(res)).to.satisfy(isTruthy)
+
+    // fault
+
+    res = callOnFault(returnsFault, testFault)
+    let resolvedRes = await res
+    expect(isPromise(res)).to.equal(true)
+    expect(resolvedRes).to.equal(testFault)
+
+    const fault = Fault('McFault')
+    res = callOnFault([addNote('faulty'), returnsFaultAsync, addNote('McFault')], fault)
+    resolvedRes = await res
+    expect(isPromise(res)).to.equal(true)
+    expect(resolvedRes).to.equal(testFault)
+    expect(getNotes(fault)).to.deep.equal(['faulty'])
+
+    // throw
+
+    res = callOnFault([throws, addNote('McFault')], fault)
+    resolvedRes = await res
+    expect(isPromise(res)).to.equal(true)
+    expect(getExceptionMsg(await res)).to.equal('thrown')
+
+    res = callOnFault([asyncThrow, addNote('McFault')], fault)
+    resolvedRes = await res
+    expect(isPromise(res)).to.equal(true)
+    expect(getExceptionMsg(await res)).to.equal('thrown')
+
+    // reject
+
+    // TODO: wtf, does not work
+    // res = callOnFault([asyncReject, noop], fault)
+    // resolvedRes = await res
+    // console.log('resolvedRes: ', resolvedRes)
+    // expect(isPromise(res)).to.equal(true)
+    // expect(getExceptionMsg(await res)).to.equal('rejected')
   })
-  // fault/throw/reject
-  xit('should test callOnFault() fault conditions')
+  xit('should handle testCallOnFault promise($fm) correctly')
 }
 
-const testPassthroughIf = () => xit('should test passthroughIf')
+const testPassthroughIf = () => {
+  it('should handle passthroughIf correctly', async () => {
+    expect(isPassthrough(await passthroughIf(isFault, testJust))).to.equal(false)
+    expect(isPassthrough(await passthroughIf(isFault, testFault))).to.equal(true)
+    expect(await passthroughIf(isFault, testFault)).to.not.equal(true)
+    expect(extract(await passthroughIf(isFault, testFault))).to.equal(testFault)
+  })
+  xit('should handle passthroughIf promise($fm) correctly')
+  xit('should test more passthroughIf cases ??')
+  xit('should test passthroughIf error')
+}
 
 const testCaseOf = () => {
   it('should hanndle caseof correctly', async () => {
@@ -239,5 +333,47 @@ const testCaseOf = () => {
   })
 
   xit('should test more caseOf scenarios')
+  xit('should test more conditional fonad operators')
+  xit('should caseOf promises')
+  // export const addErrCodeIfNone = fCurry(($code, $fm) => {
+  // export const addNoteIf = curry(async ($conditions, $note, $fm) => {
+  // export const addClientErrMsgIf = curry(async ($conditions, $msg, $fm) => {
+  // export const addErrCodeIf = curry(async ($conditions, $code, $fm) => {
 }
 
+const testConditionalCombinations = () => {
+  it('should handle conditional combinations correctly', async () => {
+
+    const justTrue  = Just(true)
+    const justTrueAsync  = asyncResolve(justTrue)
+    const fault = Fault('oh no you dont')
+
+    let res  = returnValIf(isTrue,
+      caseOf([
+        [ true, reflect ],
+        [ orElse, () => fault ]
+      ]), justTrue
+    )
+    let resolvedRes = await res
+    expect(isPromise(res)).to.equal(true)
+    expect(isPassthrough(resolvedRes)).to.equal(true)
+    expect(extract(resolvedRes)).to.equal(justTrue)
+
+    res  = returnValIf(isTrue,
+      caseOf([
+        [ false, reflect ],
+        [ orElse, () => fault ]
+      ]), justTrueAsync
+    )
+    resolvedRes = await res
+    expect(isPromise(res)).to.equal(true)
+    expect(isPassthrough(resolvedRes)).to.equal(true)
+    expect(extract(resolvedRes)).to.equal(fault)
+  })
+
+  it('should test lots more conditional combinations')
+}
+
+const testReturnIf = () => xit('should test testReturnIf')
+const testReturnValIf = () => xit('should test returnValIf')
+const testFaultIf = () => xit('should test testFaultIf() including promise inputs')

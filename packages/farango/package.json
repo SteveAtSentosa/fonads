@@ -24,7 +24,7 @@
     "watch:test": "onchange 'src/**/*.js' 'test/**/*.js' -- yarn test",
     "watch:build": "onchange 'src/**/*.js' -- yarn build:umd:min",
     "watch:tinker": "onchange 'src/**/*.js' 'test/**/*.js' -- yarn tinker",
-    "st": "babel-node tinker/smoketest.js",
-    "gt": "babel-node tinker/graphtest.js"
+    "smoke": "babel-node tinker/smoketest.js",
+    "graph": "babel-node tinker/graphtest.js"
   }
 }

@@ -77,6 +77,8 @@ straight forward and bullet proof in the face of errors and exceptions.  Fonaid 
 be used in function pipelines.  In fact, it is entirely possible that functions created using the fonad
 library will consist of nothing other then a function pipeline.
 
+TBD: talk about no faults in
+TBD: talk about asycn/sycn
 TBD: examples
 
 ## Trailing Monad
@@ -193,7 +195,23 @@ Notes can be added to a monad of any type via `addNote(note, fm)`
 
 TBD
 
+### Fonad operators
 
+Fonads provides a suite of functions that functions operate directly on a fonad, for example to check fonad type, or to add a note.  The fonad library supports mapping and chaining of these Functions for a fonad, and in these cases, map/chain do the following to ensure these functions work propertly
+
+1. Normally map and chain are non fault reflective, however if a fonadic operator is supplied as the function and a non just fonad is supplied as the subject, it will NOT be reflected
+2. map/chain will apply the function directly to the subject fm as opposed to it's contents
+3. map/chain will return the fonadified result of the operator
+
+There are
+
+
+fmStateCheck
+
+fmOperator = fmUpdate || fonadQuery
+
+fonadUpdater: operates on FM changes state,  (eg addNote) (mutates) ... return updated fm
+fonadQuery: checks state of fm only, for example (does not mutate) ... return results of state check (usuually)
 
 
 
