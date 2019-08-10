@@ -1,9 +1,9 @@
 module.exports = {
   extends: ['standard', 'prettier'],
-  env: {
-    browser: true,
-    es6: true,
-  },
+  // env: {
+  //   browser: true,
+  //   es6: true,
+  // },
   plugins: ['react', 'mocha'],
   env: {
     node: true,

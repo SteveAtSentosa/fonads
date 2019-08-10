@@ -26,6 +26,10 @@ const go = () =>
     openConnection('root', 'pw'),
     capture(connection),
 
+    logMsgIf(isNotFault, '\n... dropping database if it exists'),
+    switchTo(connection),
+    dropDatabase('stest', { graceful }),
+
     logMsgIf(isNotFault, '\n... creating database'),
     createDatabase(dbName, { use, graceful }),
 
@@ -53,10 +57,6 @@ const go = () =>
     logMsgIf(isNotFault, '\n... invalid aql query'),
     aqlQuery('FOR d in testCollection FILTER d.name == "tinkr" return d'),
     logIf(isNotFault),
-
-    logMsgIf(isNotFault, '\n... deleting database'),
-    switchTo(connection),
-    dropDatabase('stest', {}),
 
     logMsg('\nDONE'),
     logStatus,

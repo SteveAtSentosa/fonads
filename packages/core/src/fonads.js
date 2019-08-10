@@ -185,7 +185,7 @@ export const chain = curry(($fn, $fm) => {
 export const mapMethod = curry(($method, $args, $fm) => {
   if (isPromise($fm)) return $fm.then(resolvedFm => mapMethod($method, $args, resolvedFm))
   const op = 'mapMethod()'
-  const method = extract($method); const args = _extractList($args);
+  const method = extract($method); const args = extractList($args);
   const msg = `Exception thrown by map method '${method}'`
   const { shouldReturn, toReturn } = _checkMapMethodArgs(op, method, args, $fm)
   if (shouldReturn) return toReturn
@@ -217,7 +217,7 @@ export const chainMethod = curry(($method, $args, $fm) => {
 export const call = curry(($fnOrFnList, $fm) => {
   if (isPromise($fm)) return $fm.then(resolvedFm => call($fnOrFnList, resolvedFm))
   if (isPassthrough($fm)) return $fm
-  if (noneAreFonadOperators(_extractList($fnOrFnList)) && isNonJustFm($fm)) return $fm
+  if (noneAreFonadOperators(extractList($fnOrFnList)) && isNonJustFm($fm)) return $fm
   return _call($fnOrFnList, $fm)
 })
 
@@ -243,9 +243,9 @@ export const callMethod = curry(($method, $args, $fm) => {
 
 // // TODO: get this one right ... or just check in functions ... probably better
 // const _shouldReflect = ($fm, $fnOrFnList=[] ) => {
-//   if (any(isFonadOperator, _extractList($fnOrFnList))) return false
+//   if (any(isFonadOperator, extractList($fnOrFnList))) return false
 //   return isNonJustFm($fm)
-//   // return !any(isFonadOperator, _extractList($fnOrFnList)) && isNonJustFm($fm)
+//   // return !any(isFonadOperator, extractList($fnOrFnList)) && isNonJustFm($fm)
 // }
 
 // type checking free
@@ -259,7 +259,7 @@ export const _call = curry(($fnOrFnList, $fm) => {
 
 const _callFnListAsync = ($fnList, $fm) => {
   const final = async v => { const res = await v; return isFault(res) ? res : $fm }
-  const callList = _extractList($fnList)
+  const callList = extractList($fnList)
   const mapList = callList.map(fn => async v => {
     const res = await _call(fn,v)
     return isFault(res) ? res : $fm
@@ -379,7 +379,7 @@ export const capture = curry((captureHere, $fm) => {
 export const instantiateClass = curry(($className, $Class, $args) => {
   if (isNonJustFm($args)) return $args
   const op = 'instantiating class'
-  const args = _extractList($args)
+  const args = extractList($args)
   const className = extract($className)
   const Class = extract($Class)
   try {
@@ -389,7 +389,8 @@ export const instantiateClass = curry(($className, $Class, $args) => {
   }
 })
 
-const _extractList = $list => flatArrayify(extract($list)).map($v => extract($v))
+export const extractList = $list =>
+  flatArrayify(extract($list)).map($v => extract($v))
 
 // experimental
 
@@ -398,7 +399,7 @@ const _extractList = $list => flatArrayify(extract($list)).map($v => extract($v)
 // TODO: is there a different way to do this (like map(R.map) kind of thing?)
 // very experimental
 export const mapOver = curry(($fn, $fmList) => {
-  const list = _extractList($fmList)
+  const list = extractList($fmList)
   const fn = extract($fn)
   // TODO: if any of the results in the list are a fault, return fauult instead???
   return Just(list.map($fm => map(fn, $fm)))
@@ -506,7 +507,7 @@ export const addErrCodeIf = curry(async ($conditions, $code, $fm) => {
 //   returns true if all preds pass, otherwise false
 //   accomadates mixture of sycn and async functions in the list
 export const checkPredList = curry(async ($predList, $fm) => {
-  const predList = _extractList($predList)
+  const predList = extractList($predList)
   if (isPassthrough($fm)) return $fm
   if (noneAreFonadOperators(predList) && isNonJustFm($fm)) return $fm
   const results = await Promise.all(predList.map(
@@ -540,7 +541,7 @@ export const check = async ($conditions, fm) => {
   // TODO: find out why this fails
   //  const fmResolved = await fonadify($fm)
 
-  const conditions = _extractList($conditions)
+  const conditions = extractList($conditions)
   const hardConditions = (await Promise.all(
     conditions.filter(isNotFunction)
   )).map(extract)
@@ -564,7 +565,7 @@ export const callIf = curry(async ($conditions, $fnOrFnList, $fm) => {
   if(any(isPromise, [$conditions, $fnOrFnList, $fm]))
     return callIf(await $conditions, await $fnOrFnList, await $fm)
   if (isPassthrough($fm)) return $fm
-  if (noneAreFonadOperators(_extractList($conditions)) && isNonJustFm($fm)) return $fm
+  if (noneAreFonadOperators(extractList($conditions)) && isNonJustFm($fm)) return $fm
   const shouldCall = await check($conditions, $fm)
   return (
     isFault(shouldCall) ? shouldCall :
@@ -578,7 +579,7 @@ export const mapIf = curry(async ($conditions, $fn, $fm) => {
   if(any(isPromise, [$conditions, $fn, $fm]))
     return mapIf(await $conditions, await $fn, await $fm)
   if (isPassthrough($fm)) return $fm
-  if (noneAreFonadOperators(_extractList($conditions)) && isNonJustFm($fm)) return $fm
+  if (noneAreFonadOperators(extractList($conditions)) && isNonJustFm($fm)) return $fm
   const shouldMap = await check($conditions, $fm)
   return (
     isFault(shouldMap) ? shouldMap :
@@ -609,7 +610,7 @@ export const callMethodIf = curry(async ($conditions, $method, $args, $fm) => {
   if(any(isPromise, [ $conditions, $method, $args, $fm ]))
     return callMethodIf(await $conditions, await $method, await $args, await $fm)
   if (isPassthrough($fm)) return $fm
-  if (noneAreFonadOperators(_extractList($conditions)) && isNonJustFm($fm)) return $fm
+  if (noneAreFonadOperators(extractList($conditions)) && isNonJustFm($fm)) return $fm
   const shouldCall = await check($conditions, $fm)
   return (
     isFault(shouldCall) ? shouldCall :
@@ -622,7 +623,7 @@ export const callOnFault = curry(($fnOrFnList, maybeFault) => {
   if (isPromise(maybeFault))
     return maybeFault.then(maybeFaultResolved => callOnFault($fnOrFnList, maybeFaultResolved))
   if (isNotFault(maybeFault)) return maybeFault
-  const fnList = _extractList($fnOrFnList)                // since we are dealing with a fault
+  const fnList = extractList($fnOrFnList)                // since we are dealing with a fault
   const allFonadOperators = all(isFonadOperator, fnList)  // all fns must be fonadic operators
   return allFonadOperators ?
     _call(fnList, maybeFault) :
@@ -763,7 +764,7 @@ export const fIsFalse = $fm =>
 
 export const fIncludes = curry(($val, $fmList) => {
   if (isNonJustFm($fmList)) return $fmList
-  const fault = find(isFault, _extractList($fmList)) // ??
+  const fault = find(isFault, extractList($fmList)) // ??
   return fault || Just(fIsArray($fmList) && includes(extract($val), extract($fmList)))
 })
 

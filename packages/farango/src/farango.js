@@ -4,7 +4,7 @@ import { Database, aql } from 'arangojs'
 import { addNote, addNoteIf, isNothing, capture, addErrCode, addErrCodeIfNone, callIf, propagateIf, pt } from '@fonads/core'
 import { callOnFault, returnIf, returnValIf, isFault, isJust, reflect } from '@fonads/core'
 import { Nothing, Just, Fault } from '@fonads/core'
-import { mapMethod, callMethod, callMethodIf, map, chain, call, propagate, extract, caseOf, orElse } from '@fonads/core'
+import { mapMethod, callMethod, callMethodIf, map, chain, call, propagate, extract, extractList, caseOf, orElse } from '@fonads/core'
 import { fEq, fIncludes, fProp, fStr, fIsTrue, fIsFalse, fIsTruthy, fIsFalsey } from '@fonads/core'
 import { pipeAsyncFm, instantiateClass, h } from '@fonads/core'
 import { log, logRaw, logMsg, logWithMsg, logTypeWithMsg, logValWithMsg, logStatus, logRawWithMsg } from '@fonads/core'
@@ -16,6 +16,7 @@ const graceful = true
 const _isGraceful = $opts => !!fProp('graceful', extract($opts))
 const _shouldUse = $opts => !!fProp('use', extract($opts))
 const _returnConnection = $opts => !!fProp('returnConnection', extract($opts))
+const _isEdge = $opts => !!fProp('edge', extract($opts))
 
 // TODO:
 // * I probably can remove asycn fn prependers wheenver returning resuilt of pipeAsycnFm
@@ -145,11 +146,13 @@ export const collectionExists = curry(($collectionName, $connection) =>
 // createCollection [async, reflective]
 //   Given a connection, create a collection within the database currently being used
 //   opts {
+//     edge:  // is this an edge collection? (defaults to false)
 //     graceful: bool // if collection already exists, do not report error and return existing collection
 //     returnConnection: bool // if true, returns $connection instead of $collection
 //   }
 //   '$collectionName' -> {$connection} -> J({collection}) | F
 export const createCollection = curry(async ($collectionName, $opts, $connection) => {
+  const methodName = _isEdge($opts) ? 'edgeCollection' : 'collection'
   return pipeAsyncFm(
     collectionExists($collectionName),
     returnValIf(fIsTruthy, caseOf([
@@ -157,7 +160,7 @@ export const createCollection = curry(async ($collectionName, $opts, $connection
       [ orElse, () => Fault({ op: 'Creating collection', msg: `cant create '${extract($collectionName)}', it already exists` }) ]
     ])),
     propagate($connection),
-    mapMethod('collection', extract($collectionName)),
+    mapMethod(methodName, extract($collectionName)),
     callMethod('create', []),
     propagateIf(_returnConnection($opts), $connection),
     callOnFault([
@@ -231,7 +234,9 @@ export const aqlQuery = curry(async ($query, $connection) => {
 export const dropDatabase = curry(async ($dbName, $opts, $connection) =>
   pipeAsyncFm(
     returnIf([_isGraceful($opts), databaseDoesNotExist($dbName)]),
+    _pushActiveDb('_system', $connection),
     mapMethod('dropDatabase', extract($dbName)),
+    _popActiveDb($connection),
     propagate($connection),
     callOnFault([
       addErrCode(ec.FARANGO_CANT_DROP_DB),
@@ -239,6 +244,31 @@ export const dropDatabase = curry(async ($dbName, $opts, $connection) =>
     ]),
   )($connection),
 )
+
+export const createGraph = curry(async ($graphName, $edgeDefinitions, $connection) => {
+  return pipeAsyncFm(
+    mapMethod('graph', $graphName),
+    mapMethod('create', { edgeDefinitions: $edgeDefinitions }),
+  )($connection)
+})
+
+export const createGraphPass1 = curry(async (
+  $graphName,
+  $edgeCollectionName,
+  $fromVertexCollectionNames,
+  $toVertexCollectionsNames,
+  $connection) => {
+  return pipeAsyncFm(
+    mapMethod('graph', $graphName),
+    mapMethod('create', {
+      edgeDefinitions: [{
+        collection: extract($edgeCollectionName),
+        from: extractList($fromVertexCollectionNames),
+        to: extractList($toVertexCollectionsNames)
+      }]
+    }),
+  )($connection)
+})
 
 //*****************************************************************************
 // Helpers
