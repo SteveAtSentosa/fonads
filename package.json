@@ -9,7 +9,7 @@
     "packages/*"
   ],
   "devDependencies": {
-    "lerna": "^3.15.0"
+    "lerna": "^3.16.4"
   },
   "scripts": {
     "clean": "lerna run clean",

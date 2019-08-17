@@ -1,14 +1,14 @@
 {
   "name": "@fonads/core",
   "version": "0.0.0",
-  "main": "dist/fonads.min.js",
+  "main": "dist/fonads.js",
   "author": "Steven Saunders <steve@sentosatech.com>",
   "description": "Core fonads library",
   "license": "MIT",
   "dependencies": {
     "json-stringify-safe": "^5.0.1",
     "ramda": "^0.26.1",
-    "ramda-adjunct": "^2.18.0"
+    "ramda-adjunct": "^2.19.0"
   },
   "scripts": {
     "clean": "rimraf es dist lib",
@@ -22,7 +22,7 @@
     "tinker": "babel-node tinker/tinker.js",
     "viz": "babel-node visualize/runVizualize.js",
     "watch:test": "onchange 'src/**/*.js' 'test/**/*.js' -- yarn test",
-    "watch:build": "onchange 'src/**/*.js' -- yarn build:umd:min",
+    "watch:build": "onchange 'src/**/*.js' -- yarn build:umd",
     "watch:tinker": "onchange 'src/**/*.js' 'test/**/*.js' -- yarn tinker"
   }
 }

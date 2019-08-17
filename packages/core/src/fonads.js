@@ -1,6 +1,8 @@
 // TODO:
 
 // CORE TODO:
+// * tests for error stack parsing stuff in error (for various node versions, and browsers)
+//   If I can't get this solid, then abondon it
 // * Formalize concept of action list, which can be parallel, pipeline, passthrough, etc (see notes for caseOf)
 // * Seems like things are getting shakey, do a careful think on concepts, approaches, and see if I can codify them
 //   and they make sense and will always be consistent (think isFonadOperator, when to reflect, etc etc)

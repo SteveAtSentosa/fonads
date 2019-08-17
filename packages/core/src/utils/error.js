@@ -9,14 +9,10 @@ export const lineNum = () => new Error().stack.split('\n')[2]
 // return the file, function and lineNum and stack at which this fxn is called
 export const here = () => {
   const stackRow = new Error().stack.split('\n')[2].trim()
+  const filePath = last(stackRow.split(':')[0].split(' ')) || ''
+  const file = last(filePath.replace('(', '').split('/'))
   return {
-    file: last(
-      stackRow
-        .split(':')[0]
-        .split(' ')[2]
-        .replace('(', '')
-        .split('/'),
-    ),
+    file,
     fn: stackRow.split(':')[0].split(' ')[1],
     line: Number(stackRow.split(':')[1].trim()),
     stack: callStack(1),
