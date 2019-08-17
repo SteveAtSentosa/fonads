@@ -20,16 +20,21 @@
 
 // TODO: final push
 
-import { curry, prop, propOr, propEq, complement, includes, drop, pipe, keys, any, all, find } from 'ramda'
 import {
-  isObject, isFunction, isNotFunction, isNotObject,
-  isArray, isFalsy, isPromise, isNilOrEmpty, isTruthy
-} from 'ramda-adjunct'
-import { flatArrayify, isEmptyOrNil } from './utils/types'
+  curry, prop, propOr, propEq, complement, includes,
+  drop, pipe, keys, any, all, find, nth
+} from 'ramda'
+
+import {
+  isObject, isFunction, isNotFunction, isNotObject, isString, isNotString,
+  isArray, isNotArray, isFalsy, isPromise, isNilOrEmpty, isTruthy
+}
+from 'ramda-adjunct'
+
+import { flatArrayify, isEmptyOrNil, isNotArrayOfLength, isArrayOfLength } from './utils/types'
 import { isError, here, throwIf } from './utils/error'
 import { codeInfoOrStr, str, json } from './utils/string'
 import { pipeAsync, composeAsync, fCurry, reflect } from './utils/fn'
-
 import Just from './Just'
 import Nothing from './Nothing'
 import Ok from './Ok'
@@ -749,11 +754,47 @@ export const orElse = () => true
 // TODO: tests need to be written
 // TODO: need to check for incoming promises
 // TODO: need to reflect when appropriate
+// TODO: DUUUUUUUDE : maybe you should just be mapping some of these using ramda fns or my own fxns
+//       this would take care of reflection AND promises !!
 
-export const fIsArray = $fm => isArray(extract($fm))
+// export const fIsArray = $fm => isArray(extract($fm))
+// export const fIsNotArray = $fm => isNotArray(extract($fm))
 
-export const fEq = curry(($val, $fm) => extract($val) === extract($fm))
+export const fIsArray = $fm => map(isArray, $fm)
+export const fIsNotArray = $fm => map(isNotArray, $fm)
+
+export const fIsString = $fm => map(isString, $fm)
+export const fIsNotString = $fm => map(isNotString, $fm)
+
+// // return length of array or str.  Fault on non array/str
+// export const fLength = $fm => {
+//   if (isNonJustFm($fm)) return $fm
+//   const val = extract($fm)
+//   if (isNotArray(val) && isNotString(val)) {
+//     return Fault({op: 'fLength()', msg: `non string/array supplied for length check: ${fStrPretty(val)}`})
+//   }
+//   return Just(val.length)
+// }
+
+// check length of array or string
+export const fIsArrayOfLength = curry(($length, $fm) =>
+  // isNonJustFm($fm) ? $fm : isArrayOfLength(extract($length), extract($fm))
+  map(isArrayOfLength(extract($length)), $fm)
+)
+
+// TODO: can I create an fComplement that handles fonad values correctly?
+export const fIsNotArrayOfLength = curry(($length, $fm) =>
+  map(isNotArrayOfLength(extract($length)), $fm)
+  // isNonJustFm($fm) ? $fm : isNotArrayOfLength(extract($length), extract($fm))
+)
+
+export const fEq = curry(($val1, $val2) => extract($val1) === extract($val2))
 export const fProp = curry(($propName, $fm) => prop(extract($propName), extract($fm)))
+
+export const fPropEq = curry(($propName, $valToCheck, $fm) =>
+  map(propEq(extract($propName), extract($valToCheck)), $fm))
+
+export const fGetArrayEntry = curry((idx, $fm) => map(nth(idx), $fm))
 
 export const fIsTrue = $fm =>
   isNonJustFm($fm) ? $fm : extract($fm) === true
@@ -783,6 +824,8 @@ export const fIsFalsey = $fm => {
   return isFalsy(extract($fm))
 }
 
+export const fReturnTrue = () => Just(true)
+export const fReturnFalse = () => Just(false)
 
 // TODO: would be nice to figure this out, how do you handle
 // currying and variabl number of args?
@@ -904,6 +947,12 @@ export const logValWithMsg = curry((msg, val, fm) => {
   console.log((msg))
   return logVal(val, fm)
 })
+
+//*****************************************************************************
+// experimental
+//*****************************************************************************
+
+export const returnNothing = () => Nothing()
 
 //*****************************************************************************
 

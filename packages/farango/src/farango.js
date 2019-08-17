@@ -2,10 +2,10 @@ import { curry, mergeLeft, prop, path, complement } from 'ramda'
 import { isTrue, isFalse } from 'ramda-adjunct'
 import { Database, aql } from 'arangojs'
 import { addNote, addNoteIf, isNothing, capture, addErrCode, addErrCodeIfNone, callIf, propagateIf, pt } from '@fonads/core'
-import { callOnFault, returnIf, returnValIf, isFault, isJust, reflect } from '@fonads/core'
+import { callOnFault, returnIf, returnValIf, isFault, isJust, reflect, returnFault, returnNothing } from '@fonads/core'
 import { Nothing, Just, Fault } from '@fonads/core'
 import { mapMethod, callMethod, callMethodIf, map, chain, call, propagate, extract, extractList, caseOf, orElse } from '@fonads/core'
-import { fEq, fIncludes, fProp, fStr, fIsTrue, fIsFalse, fIsTruthy, fIsFalsey } from '@fonads/core'
+import { fEq, fIncludes, fProp, fStr, fStrPretty, fIsTrue, fIsFalse, fIsTruthy, fIsFalsey, fIsArrayOfLength, fIsNotArrayOfLength, fGetArrayEntry } from '@fonads/core'
 import { pipeAsyncFm, instantiateClass, h } from '@fonads/core'
 import { log, logRaw, logMsg, logWithMsg, logTypeWithMsg, logValWithMsg, logStatus, logRawWithMsg } from '@fonads/core'
 import { ec } from './error'
@@ -213,16 +213,34 @@ export const getDocByIdOrKey = curry(async ($idOrKey, $opts, $collection) =>
 )
 
 // aqlQuery [asycn]
-//   given a $connection and an aql query, execute the query
-//   $query -> $connnection -> J(query-results)
+//   given a $connection and an aql query, execute the query, results always returned in an arry
 //   opts {
 //     use: 'dbName'  // if supplied, will switch active DB in the collection to dbName // NYI
 //   }
+//   $query -> $connnection -> J([query-results])One
 export const aqlQuery = curry(async ($query, $connection) => {
   return pipeAsyncFm(
     mapMethod('query', $query),
     mapMethod('all', []),
-    callOnFault([addErrCode(ec.FARANGO_AQL_QUERY_FAILED), addNote({ msg: `aql query failed: '${fStr($query)}'`, here: h() })]),
+    callOnFault([
+      addErrCode(ec.FARANGO_AQL_QUERY_FAILED),
+      addNote({ msg: `aql query failed: '${fStr($query)}'`, here: h() })
+    ]),
+  )($connection)
+})
+
+// returns the first entry in the match, returns fault if more than one match
+export const aqlQueryOne = curry(async ($query, $connection) => {
+  return pipeAsyncFm(
+    aqlQuery($query),
+    caseOf([
+      [ fIsArrayOfLength(0),  returnNothing ],
+      [ fIsNotArrayOfLength(1), queryRes => Fault({
+        op: 'aqlQueryOne()',
+        msg: `for query '${fStr($query)}', non array, or more than 1 result returned: ${fStrPretty(queryRes)}` })
+      ],
+      [ orElse, fGetArrayEntry(0) ]
+    ]),
   )($connection)
 })
 

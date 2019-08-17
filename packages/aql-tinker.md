@@ -1,3 +1,20 @@
+
+
+# from webinar
+
+RETURN DOCUMENT("users/jill") ... try that out
+
+GEO_POINT(lat, long) ... shows on map
+
+joins are simply nested loops in aql
+
+COLLECT - grouping
+
+COLLECT AGGREGATE : performance enhance
+
+SORT
+
+
 # Notes
 
 
@@ -21,34 +38,68 @@ traversal. If not specified min defaults to 1 and max defaults to min
 
 # These work
 
-for grant in UserGrant
-    filter grant._from == "users/trustedTrainer"
-    filter grant.type == "toMe"
-    return grant
+> to get grant
 
-for grant in grants
-    filter grant.granter == 'users/jill' AND grant.grantee == 'users/joe'
-    return grant
+for v, e, p in 1..2
+  outbound 'users/jill'
+  GranterGrant, GrantGrantee
+  filter e.edgeType == 'GrantGrantee' and v.type == 'User' and v._id == 'users/jim'
+  limit 1
+  return p.vertices[1]._id
+
+[
+  "grants/jillsGrantsToJim"
+]
+
+> to check for privilege grant
 
 for v in 1..5
-  outbound 'grants/jimsGrantsToJoe'
-  RolePrivilege, GrantRole, GrantPrivilege, UserGrant
-  filter v.name == 'JournalRead'
+  outbound 'grants/jillsGrantsToTrustedTrainer'
+  RolePrivilege, GrantRole, GrantPrivilege
+  filter v.type == 'Privilege' and v._id == 'privileges/JournalRead'
   limit 1
-  return v
+  return v._id
 
 
-# Tinker
 
-for v in 1..5 outbound
-  let grant = FIRST(
-    for grant in UserGrant
-        filter grant._from == "users/trustedTrainer"
-        filter grant.type == "toMe"
-        return grant
+> All in one shot via sub query
+
+[
+  "privileges/JournalRead"
+]
+
+for vert in 1..5
+  let grantsId = (
+    for v, e, p in 1..2
+      outbound 'users/jill'
+      GranterGrant, GrantGrantee
+      filter e.edgeType == 'GrantGrantee' and v.type == 'User' and v._id == 'users/jim'
+      limit 1
+      return p.vertices[1]._id
+  )
+  outbound 'grants/jillsGrantsToTrustedTrainer'
+  RolePrivilege, GrantRole, GrantPrivilege
+  filter vert.type == 'Privilege' and vert._id == 'privileges/JournalRead'
+  limit 1
+  return vert._id
+
+> this works
+```
+LET qFromUser = 'users/jill'
+LET qToUser = 'users/trustedTrainer'
+LET qPriv = 'privileges/JournalRead'
+LET grant = (
+    for v, e, p in 1..2
+      outbound qFromUser
+      GranterGrant, GrantGrantee
+      filter e.edgeType == 'GrantGrantee' and v.type == 'User' and v._id == qToUser
+      limit 1
+      return p.vertices[1]._id
     )
-  grant
-  RolePrivilege, GrantRole, GrantPrivilege, UserGrant
-  filter v._key == 'PlanRead'
-  return v
-
+for v in 1..5
+  outbound grant[0]
+  RolePrivilege, GrantRole, GrantPrivilege
+  filter v.type == 'Privilege' and v._id == qPriv
+  limit 1
+  return v._id
+```

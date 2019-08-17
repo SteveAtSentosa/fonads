@@ -1,14 +1,19 @@
-import { prop, curry, any, find } from 'ramda'
-import { Nothing } from '@fonads/core'
-import {
-  Just, pipeAsync, isNotFault, capture, switchTo, logStatus, logMsg, logMsgIf, isFault,
-  logWithMsg
-} from '@fonads/core'
-import {
-  openConnection, dropDatabase, createDatabase, createCollection, insertDoc, createGraph
-} from '../src/farango'
+import { prop, curry, any, find, __ } from 'ramda'
 import { aql } from 'arangojs';
-import { log } from '@fonads/core'
+
+import {
+  Just, Nothing, pipeAsync, capture, switchTo,
+  isNotFault, isFault, isNothing, isNonJustFm, extract,
+  log, logStatus, logMsg, logMsgIf, logWithMsg,
+  fReturnTrue, fReturnFalse, orElse, fPropEq, caseOf
+}
+from '@fonads/core'
+
+import {
+  openConnection, dropDatabase, createDatabase, createCollection,
+  createGraph, insertDoc, aqlQuery, aqlQueryOne
+}
+from '../src/farango'
 
 
 // TODO:
@@ -17,42 +22,42 @@ import { log } from '@fonads/core'
 // * look through arango tests to get better feel for use of javascript interface
 
 
-const docEntry = (name, data) => ({ ...data, _key: name, name })
+const docEntry = (name, data = {}) => ({ ...data, _key: name, name })
 
 const usersData = [
   // docEntry('admin'),
-  docEntry('jim'),
-  docEntry('jill'),
-  docEntry('bill'),
-  docEntry('joe'),
-  docEntry('trainer'),
-  docEntry('trustedTrainer'),
+  docEntry('jim', { type: 'User' }),
+  docEntry('jill', { type: 'User' }),
+  docEntry('bill', { type: 'User' }),
+  docEntry('joe', { type: 'User' }),
+  docEntry('trainer', { type: 'User' }),
+  docEntry('trustedTrainer', { type: 'User' }),
 ]
 
 const grantsData = [
   // docEntry('jimsGrantsToJim'),
   // docEntry('jimsGrantsToAdmin'),
-  docEntry('jimsGrantsToBill', { granter: 'users/jim', grantee: 'users/bill' }),
-  docEntry('jimsGrantsToJoe', { granter: 'users/jim', grantee: 'users/joe' }),
-  docEntry('jillsGrantsToJoe', { granter: 'users/jill', grantee: 'users/joe' }),
-  docEntry('jillsGrantsToJim', { granter: 'users/jill', grantee: 'users/jim' }),
-  docEntry('jillsGrantsToTrainer', { granter: 'users/jill', grantee: 'users/trainer' }),
-  docEntry('jillsGrantsToTrustedTrainer', { granter: 'users/jill', grantee: 'users/trustedTrainer' }),
+  docEntry('jimsGrantsToBill', { type: 'Grant' }),
+  docEntry('jimsGrantsToJoe', { type: 'Grant' }),
+  docEntry('jillsGrantsToJoe', { type: 'Grant' }),
+  docEntry('jillsGrantsToJim', { type: 'Grant' }),
+  docEntry('jillsGrantsToTrainer', { type: 'Grant' }),
+  docEntry('jillsGrantsToTrustedTrainer', { type: 'Grant' }),
 ]
 
 const rolesData = [
   // docEntry('Admin'),
-  docEntry('Follower'),
-  docEntry('Confidant'),
-  docEntry('Self'),
-  docEntry('Trainer'),
+  // docEntry('Self'),
+  docEntry('Follower', { type: 'Role' }),
+  docEntry('Confidant', { type: 'Role' }),
+  docEntry('Trainer', { type: 'Role' }),
 ]
 
 const rwud = priv => ([
-  docEntry(`${priv}Read`),
-  docEntry(`${priv}Write`),
-  docEntry(`${priv}Update`),
-  docEntry(`${priv}Delete`),
+  docEntry(`${priv}Read`, { type: 'Privilege' }),
+  docEntry(`${priv}Write`, { type: 'Privilege' }),
+  docEntry(`${priv}Update`, { type: 'Privilege' }),
+  docEntry(`${priv}Delete`, { type: 'Privilege' }),
 ])
 
 const privilegesData = [
@@ -66,50 +71,53 @@ const privilegesData = [
 const rolePrivilegeEdges = [
   // { _from: 'roles/Admin', _to: 'privileges/All' },
   // { _from: 'roles/Self', _to: 'privileges/All' },
-  { _from: 'roles/Follower', _to: 'privileges/PlanRead' },
-  { _from: 'roles/Confidant', _to: 'privileges/PlanRead' },
-  { _from: 'roles/Confidant', _to: 'privileges/WeightRead' },
-  { _from: 'roles/Confidant', _to: 'privileges/JournalRead' },
-  { _from: 'roles/Confidant', _to: 'privileges/CommentsRead' },
-  { _from: 'roles/Confidant', _to: 'privileges/CommentsWrite' },
-  { _from: 'roles/Trainer', _to: 'privileges/PlanRead' },
-  { _from: 'roles/Trainer', _to: 'privileges/PlanWrite' },
-  { _from: 'roles/Trainer', _to: 'privileges/PlanUpdate' },
-  { _from: 'roles/Trainer', _to: 'privileges/PlanDelete' },
-  { _from: 'roles/Trainer', _to: 'privileges/CommentsRead' },
-  { _from: 'roles/Trainer', _to: 'privileges/CommentsWrite' },
-  { _from: 'roles/Trainer', _to: 'privileges/WeightRead' },
+  { _from: 'roles/Follower', _to: 'privileges/PlanRead', edgeType: 'RolePrivilege' },
+  { _from: 'roles/Confidant', _to: 'privileges/PlanRead', edgeType: 'RolePrivilege' },
+  { _from: 'roles/Confidant', _to: 'privileges/WeightRead', edgeType: 'RolePrivilege' },
+  { _from: 'roles/Confidant', _to: 'privileges/JournalRead', edgeType: 'RolePrivilege' },
+  { _from: 'roles/Confidant', _to: 'privileges/CommentsRead', edgeType: 'RolePrivilege' },
+  { _from: 'roles/Confidant', _to: 'privileges/CommentsWrite', edgeType: 'RolePrivilege' },
+  { _from: 'roles/Trainer', _to: 'privileges/PlanRead', edgeType: 'RolePrivilege' },
+  { _from: 'roles/Trainer', _to: 'privileges/PlanWrite', edgeType: 'RolePrivilege' },
+  { _from: 'roles/Trainer', _to: 'privileges/PlanUpdate', edgeType: 'RolePrivilege' },
+  { _from: 'roles/Trainer', _to: 'privileges/PlanDelete', edgeType: 'RolePrivilege' },
+  { _from: 'roles/Trainer', _to: 'privileges/CommentsRead', edgeType: 'RolePrivilege' },
+  { _from: 'roles/Trainer', _to: 'privileges/CommentsWrite', edgeType: 'RolePrivilege' },
+  { _from: 'roles/Trainer', _to: 'privileges/WeightRead', edgeType: 'RolePrivilege' },
 ]
 
 const grantRoleEdges = [
   // { _from: 'grants/jimsGrantsToJim', _to: 'roles/Self' },
   // { _from: 'grants/jimsGrantsToAdmin', _to: 'roles/Admin' },
-  { _from: 'grants/jimsGrantsToBill', _to: 'roles/Follower' },
-  { _from: 'grants/jimsGrantsToJoe', _to: 'roles/Confidant' },
-  { _from: 'grants/jillsGrantsToJoe', _to: 'roles/Follower' },
-  { _from: 'grants/jillsGrantsToJim', _to: 'roles/Confidant' },
-  { _from: 'grants/jillsGrantsToTrainer', _to: 'roles/Trainer' },
-  { _from: 'grants/jillsGrantsToTrustedTrainer', _to: 'roles/Trainer' },
+  { _from: 'grants/jimsGrantsToBill', _to: 'roles/Follower', edgeType: 'GrantRole' },
+  { _from: 'grants/jimsGrantsToJoe', _to: 'roles/Confidant', edgeType: 'GrantRole' },
+  { _from: 'grants/jillsGrantsToJoe', _to: 'roles/Follower', edgeType: 'GrantRole' },
+  { _from: 'grants/jillsGrantsToJim', _to: 'roles/Confidant', edgeType: 'GrantRole' },
+  { _from: 'grants/jillsGrantsToTrainer', _to: 'roles/Trainer', edgeType: 'GrantRole' },
+  { _from: 'grants/jillsGrantsToTrustedTrainer', _to: 'roles/Trainer', edgeType: 'GrantRole' },
 
 ]
 
 const grantPrivilegeEdges = [
-  { _from: 'grants/jillsGrantsToTrustedTrainer', _to: 'privileges/JournalRead' },
+  { _from: 'grants/jillsGrantsToTrustedTrainer', _to: 'privileges/JournalRead', edgeType: 'GrantPrivilege' },
 ]
 
-const userGrantEdges = [
-  { _from: 'users/jim', _to: 'grants/jimsGrantsToBill', type: 'fromMe' },
-  { _from: 'users/bill', _to: 'grants/jimsGrantsToBill', type: 'toMe' },
-  { _from: 'users/jim', _to: 'grants/jimsGrantsToJoe', type: 'fromMe' },
-  { _from: 'users/joe', _to: 'grants/jimsGrantsToJoe', type: 'toMe' },
-  { _from: 'users/jill', _to: 'grants/jillsGrantsToJoe', type: 'fromMe' },
-  { _from: 'users/joe', _to: 'grants/jillsGrantsToJoe', type: 'toMe' },
-  { _from: 'users/jill', _to: 'grants/jillsGrantsToJim', type: 'fromMe' },
-  { _from: 'users/jim', _to: 'grants/jillsGrantsToJim', type: 'toMe' },
-  { _from: 'users/jill', _to: 'grants/jillsGrantsToTrainer', type: 'fromMe' },
-  { _from: 'users/trainer', _to: 'grants/jillsGrantsToTrainer', type: 'toMe' },
-  { _from: 'users/jill', _to: 'grants/jillsGrantsToTrustedTrainer', type: 'fromMe' },
-  { _from: 'users/trustedTrainer', _to: 'grants/jillsGrantsToTrustedTrainer', type: 'toMe' },
+const granterGrantEdges = [
+  { _from: 'users/jim', _to: 'grants/jimsGrantsToBill', edgeType: 'GranterGrant' },
+  { _from: 'users/jim', _to: 'grants/jimsGrantsToJoe', edgeType: 'GranterGrant' },
+  { _from: 'users/jill', _to: 'grants/jillsGrantsToJoe', edgeType: 'GranterGrant' },
+  { _from: 'users/jill', _to: 'grants/jillsGrantsToJim', edgeType: 'GranterGrant' },
+  { _from: 'users/jill', _to: 'grants/jillsGrantsToTrainer', edgeType: 'GranterGrant' },
+  { _from: 'users/jill', _to: 'grants/jillsGrantsToTrustedTrainer', edgeType: 'GranterGrant' },
+]
+
+const grantGranteeEdges = [
+  { _from: 'grants/jimsGrantsToBill', _to: 'users/bill', edgeType: 'GrantGrantee' },
+  { _from: 'grants/jimsGrantsToJoe', _to: 'users/joe', edgeType: 'GrantGrantee' },
+  { _from: 'grants/jillsGrantsToJoe', _to: 'users/joe', edgeType: 'GrantGrantee' },
+  { _from: 'grants/jillsGrantsToJim', _to: 'users/jim', edgeType: 'GrantGrantee' },
+  { _from: 'grants/jillsGrantsToTrainer', _to: 'users/trainer', edgeType: 'GrantGrantee' },
+  { _from: 'grants/jillsGrantsToTrustedTrainer', _to: 'users/trustedTrainer', edgeType: 'GrantGrantee' },
 ]
 
 const createVerticies = curry(async (dataList, collection) => {
@@ -133,14 +141,16 @@ const createEdges = curry(async (edgeList, collection) => {
 
 const createRolePrivilegeEdges = createEdges(rolePrivilegeEdges)
 const createGrantRoleEdges = createEdges(grantRoleEdges)
-const createUserGrantEdges = createEdges(userGrantEdges)
+const createGranterGrantEdges = createEdges(granterGrantEdges)
+const createGrantGranteeEdges = createEdges(grantGranteeEdges)
 const createGrantPrivilegeEdges = createEdges(grantPrivilegeEdges)
 
 const edgeDefintions = [
   { collection: 'RolePrivilege',  from: ['roles'],  to: ['privileges'] },
   { collection: 'GrantRole',  from: ['grants'],  to: ['roles'] },
   { collection: 'GrantPrivilege',  from: ['grants'],  to: ['privileges'] },
-  { collection: 'UserGrant',  from: ['users'],  to: ['grants'] }
+  { collection: 'GranterGrant',  from: ['users'],  to: ['grants'] },
+  { collection: 'GrantGrantee',  from: ['grants'],  to: ['users'] }
 ]
 
 const connection = Nothing()
@@ -155,7 +165,8 @@ const privilegesCollection = Nothing()
 const rolePrivilegeEdgeCollection = Nothing()
 const grantRoleEdgeCollection = Nothing()
 const grantPrivilegeEdgeCollection = Nothing()
-const userGrantEdgeCollection = Nothing()
+const granterGrantEdgeCollection = Nothing()
+const grantGranteeEdgeCollection = Nothing()
 
 const users = Nothing()
 const grants = Nothing()
@@ -185,7 +196,8 @@ const go = () =>
     switchTo(connection), createCollection('RolePrivilege', { graceful, edge }), capture(rolePrivilegeEdgeCollection),
     switchTo(connection), createCollection('GrantRole', { graceful, edge }), capture(grantRoleEdgeCollection),
     switchTo(connection), createCollection('GrantPrivilege', { graceful, edge }), capture(grantPrivilegeEdgeCollection),
-    switchTo(connection), createCollection('UserGrant', { graceful, edge }), capture(userGrantEdgeCollection),
+    switchTo(connection), createCollection('GranterGrant', { graceful, edge }), capture(granterGrantEdgeCollection),
+    switchTo(connection), createCollection('GrantGrantee', { graceful, edge }), capture(grantGranteeEdgeCollection),
 
     logMsgIf(isNotFault, '\n... creating users'),
     switchTo(userCollection), createUsers, capture(users),
@@ -208,24 +220,86 @@ const go = () =>
     logMsgIf(isNotFault, '\n... creating GrantPrivilege edges'),
     switchTo(grantPrivilegeEdgeCollection), createGrantPrivilegeEdges,
 
-    logMsgIf(isNotFault, '\n... creating UserGrant edges'),
-    switchTo(userGrantEdgeCollection), createUserGrantEdges,
+    logMsgIf(isNotFault, '\n... creating GranterGrant edges'),
+    switchTo(granterGrantEdgeCollection), createGranterGrantEdges,
+
+    logMsgIf(isNotFault, '\n... creating GrantGrantee edges'),
+    switchTo(grantGranteeEdgeCollection), createGrantGranteeEdges,
 
     logMsgIf(isNotFault, '\n... creating graph'),
     switchTo(connection),
     createGraph('userGraph', edgeDefintions),
 
+
+    logMsgIf(isNotFault, '\n... checking privilege grants'),
+
+    switchTo(connection),  checkPriv('jill', 'jim', 'JournalRead'),
+    logWithMsg('\njill -> jim -> JournalRead'),
+
+    switchTo(connection),  checkPriv('jill', 'joe', 'JournalRead'),
+    logWithMsg('\njill -> joe -> JournalRead'),
+
+    switchTo(connection),  checkPriv('jill', 'joe', 'PlanRead'),
+    logWithMsg('\njill -> joe -> PlanRead'),
+
+    switchTo(connection),  checkPriv('jill', 'joe', 'PlanWrite'),
+    logWithMsg('\njill -> joe -> PlanWrite'),
+
+    switchTo(connection),  checkPriv('jill', 'trainer', 'PlanWrite'),
+    logWithMsg('\njill -> trainer -> PlanWrite'),
+
+    switchTo(connection),  checkPriv('jill', 'trainer', 'JournalRead'),
+    logWithMsg('\njill -> trainer -> JournalRead'),
+
+    switchTo(connection),  checkPriv('jill', 'trustedTrainer', 'JournalRead'),
+    logWithMsg('\njill -> trustedTrainer -> JournalRead'),
+
     logMsg('\nDONE'),
     logStatus,
   )('local')
+
+
+//*****************************************************************************
+
+
+const checkPriv = curry(async ($fromUser, $toUser, $privilege, $connection) =>
+  pipeAsync(
+    getGrantNode($fromUser, $toUser),
+    getGrantPriv(__, $privilege, $connection),
+    caseOf([
+      [ isNothing, fReturnFalse ],
+      [ [ fPropEq('type', 'Privilege'), fPropEq('name', $privilege) ],
+        fReturnTrue ], // TODO: if nothing is passed into fPropEq, returns true ... need to figure that one out
+      [ orElse, fReturnFalse ]
+    ]),
+  )(connection)
+)
+
+const getGrantPriv = curry(async ($grantNode, $privilege, $connection) => {
+  return aqlQueryOne(`
+    for v in 1..5
+    outbound '${extract($grantNode)}'
+    RolePrivilege, GrantRole, GrantPrivilege
+    filter v.type == 'Privilege' and v._id == 'privileges/${extract($privilege)}'
+    limit 1
+    return v`, $connection)
+})
+
+const getGrantNode = curry(($fromUser, $toUser, connection) =>
+  aqlQueryOne(`
+    FOR v, e, p IN 1..2
+    OUTBOUND 'users/${extract($fromUser)}'
+    GranterGrant, GrantGrantee
+    FILTER e.edgeType == 'GrantGrantee'
+      AND v.type == 'User'
+      AND v._id == 'users/${extract($toUser)}'
+    LIMIT 1
+    RETURN p.vertices[1]._id`, connection),
+)
+
 
 const doit = async () => {
   await go()
 }
 
 doit()
-
-
-
-
-// export const insertDoc = curry(async ($doc, $collection) =>

@@ -1,6 +1,8 @@
 import { any, not, complement, prop, curry, flatten, isNil, isEmpty } from 'ramda'
 import { isArray, isString, isFunction } from 'ramda-adjunct'
 
+// TODO: curry all of these
+
 // if input is an array return as it, otherwise return array with single element of input
 export const arrayify = input => isArray(input) ? input : [input]
 export const flatArrayify = input => flatten(arrayify(input))
@@ -9,6 +11,12 @@ export const flatArrayify = input => flatten(arrayify(input))
 // ([] -> (a->bool)) -> boolean
 export const isArrayOf = (checkPred, array) =>
   isArray(array) && not(any(complement(checkPred), array))
+
+
+// TODO: test
+export const isArrayOfLength = curry((length, toCheck) =>
+  isArray(toCheck) && toCheck.length === length)
+export const isNotArrayOfLength = complement(isArrayOfLength)
 
 export const isStringArray = array => isArrayOf(isString, array)
 export const isNotStringArray = complement(isStringArray)
