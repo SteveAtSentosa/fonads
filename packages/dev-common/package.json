@@ -42,9 +42,5 @@
     "uglifyjs-webpack-plugin": "^2.2.0",
     "webpack": "^4.39.2",
     "webpack-cli": "^3.3.6"
-  },
-  "dependencies": {
-    "@babel/preset-env": "^7.5.5",
-    "babel-core": "7.0.0-bridge.0"
   }
 }
