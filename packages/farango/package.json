@@ -1,13 +1,12 @@
 {
   "name": "@fonads/farango",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "main": "dist/farango.min.js",
   "author": "Steven Saunders <steve@sentosatech.com>",
   "description": "arango wrapped in fonads",
   "license": "MIT",
   "dependencies": {
     "arangojs": "6",
-    "json-stringify-safe": "^5.0.1",
     "ramda": "^0.26.1",
     "ramda-adjunct": "^2.19.0"
   },
@@ -19,13 +18,9 @@
     "build:umd:min": "webpack --mode=production --output-filename=farango.min.js",
     "build": "yarn clean && yarn build:umd:min",
     "prepub": "yarn clean && yarn test && yarn build",
-    "test": "mocha --require @babel/register",
-    "tinker": "babel-node tinker.js",
-    "watch:test": "onchange 'src/**/*.js' 'test/**/*.js' -- yarn test",
-    "watch:build": "onchange 'src/**/*.js' -- yarn build:umd:min",
-    "watch:tinker": "onchange 'src/**/*.js' 'test/**/*.js' -- yarn tinker",
-    "smoke": "babel-node tinker/smoketest.js",
-    "graph": "babel-node tinker/graphtest.js",
-    "direct": "babel-node tinker/direct.js"
+    "test": "mocha -r ./.register.babel.js",
+    "smoke": "node -r ./.register.babel.js tinker/smoketest.js",
+    "graph": "node -r ./.register.babel.js tinker/graphtest.js",
+    "direct": "node -r ./.register.babel.js tinker/direct.js"
   }
 }
