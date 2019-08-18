@@ -24,9 +24,9 @@
     "watch:test": "onchange 'src/**/*.js' 'test/**/*.js' -- yarn test",
     "watch:build": "onchange 'src/**/*.js' -- yarn build:umd:min",
     "watch:tinker": "onchange 'src/**/*.js' 'test/**/*.js' -- yarn tinker",
-    "smoke": "babel-node tinker/smoketest.js",
-    "graph": "babel-node tinker/graphtest.js",
-    "direct": "babel-node tinker/direct.js"
+    "smoke": "babel-node --require .registerbabel7.js tinker/smoketest.js",
+    "graph": "babel-node --require .registerbabel7.js tinker/graphtest.js",
+    "direct": "babel-node --require .registerbabel7.js tinker/direct.js"
   },
   "devDependencies": {
     "@babel/core": "^7.5.5",
