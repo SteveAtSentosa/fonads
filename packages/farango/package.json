@@ -7,9 +7,12 @@
   "license": "MIT",
   "dependencies": {
     "arangojs": "6",
-    "json-stringify-safe": "^5.0.1",
     "ramda": "^0.26.1",
     "ramda-adjunct": "^2.19.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.5.5",
+    "@babel/node": "^7.5.5"
   },
   "scripts": {
     "clean": "rimraf es dist lib",
@@ -20,16 +23,8 @@
     "build": "yarn clean && yarn build:umd:min",
     "prepub": "yarn clean && yarn test && yarn build",
     "test": "mocha --require .registerbabel7.js",
-    "tinker": "babel-node tinker.js",
-    "watch:test": "onchange 'src/**/*.js' 'test/**/*.js' -- yarn test",
-    "watch:build": "onchange 'src/**/*.js' -- yarn build:umd:min",
-    "watch:tinker": "onchange 'src/**/*.js' 'test/**/*.js' -- yarn tinker",
     "smoke": "babel-node --require .registerbabel7.js tinker/smoketest.js",
     "graph": "babel-node --require .registerbabel7.js tinker/graphtest.js",
     "direct": "babel-node --require .registerbabel7.js tinker/direct.js"
-  },
-  "devDependencies": {
-    "@babel/core": "^7.5.5",
-    "@babel/node": "^7.5.5"
   }
 }
