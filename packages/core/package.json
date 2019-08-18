@@ -1,7 +1,7 @@
 {
   "name": "@fonads/core",
   "version": "0.0.0",
-  "main": "dist/fonads.js",
+  "main": "dist/fonads.min.js",
   "author": "Steven Saunders <steve@sentosatech.com>",
   "description": "Core fonads library",
   "license": "MIT",
