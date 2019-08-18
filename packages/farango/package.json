@@ -19,7 +19,7 @@
     "build:umd:min": "webpack --mode=production --output-filename=farango.min.js",
     "build": "yarn clean && yarn build:umd:min",
     "prepub": "yarn clean && yarn test && yarn build",
-    "test": "mocha --require @babel/register",
+    "test": "mocha --require .registerbabel7.js",
     "tinker": "babel-node tinker.js",
     "watch:test": "onchange 'src/**/*.js' 'test/**/*.js' -- yarn test",
     "watch:build": "onchange 'src/**/*.js' -- yarn build:umd:min",
@@ -27,5 +27,9 @@
     "smoke": "babel-node tinker/smoketest.js",
     "graph": "babel-node tinker/graphtest.js",
     "direct": "babel-node tinker/direct.js"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.5.5",
+    "@babel/node": "^7.5.5"
   }
 }
