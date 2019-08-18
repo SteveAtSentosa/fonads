@@ -4,7 +4,7 @@
 import stringify from 'json-stringify-safe'
 
 export const Passthrough = fmToPassthrough => {
-  let passthrough = {
+  const passthrough = {
     _tag: '@@FMonad',
     _type: 'Passthrough',
     _fmToPassthrough: fmToPassthrough, // typically a fonad to be passed through a pipeline

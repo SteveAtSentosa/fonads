@@ -2,16 +2,16 @@
 // For all map functiuons, return nothing when the result isNil
 
 import { isString } from 'ramda-adjunct'
-import { msgListToStr, codeInfoOrStr, tab } from './utils/string'
-import { callStack, stackStrToArr } from './utils/error'
-import { insertNote, setNotes } from './utils/monadUtils'
+import { msgListToStr, codeInfoOrStr, tab } from '../utils/string'
+import { callStack, stackStrToArr } from '../utils/error'
+import { insertNote, setNotes } from '../utils/monadUtils'
 
 export const Fault = (options = {}) => {
   // if options is a string, assume it the error msg
   const {
     op = '', code = '', msg = '', clientMsg = '', notes = [], e = null, here
   } =  isString(options) ? { msg: options } : options
-  let fault = {
+  const fault = {
     _tag: '@@FMonad',
     _type: 'Fault',
     _notes: notes,
@@ -45,7 +45,7 @@ export const Fault = (options = {}) => {
 
 const _statusString = fault => {
   const e = fault._e
-  let toReport = [`\nERROR encountered!`]
+  const toReport = [`\nERROR encountered!`]
   if (fault._msg) toReport.push(tab(`Msg: ${fault._msg}`))
   if (fault._clientMsg) toReport.push(tab(`Client msg: ${fault._clientMsg}`))
   if (fault._code) toReport.push(tab(`Code: ${fault._code}`))

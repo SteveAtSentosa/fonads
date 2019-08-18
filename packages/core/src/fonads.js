@@ -37,11 +37,11 @@ import { flatArrayify, isEmptyOrNil, isNotArrayOfLength, isArrayOfLength } from 
 import { isError, here, throwIf } from './utils/error'
 import { codeInfoOrStr, str, json } from './utils/string'
 import { pipeAsync, composeAsync, fCurry, reflect } from './utils/fn'
-import Just from './Just'
-import Nothing from './Nothing'
-import Ok from './Ok'
-import Fault from './Fault'
-import Passthrough from './Passthrough'
+import Just from './fonads/Just'
+import Nothing from './fonads/Nothing'
+import Ok from './fonads/Ok'
+import Fault from './fonads/Fault'
+import Passthrough from './fonads/Passthrough'
 
 //*****************************************************************************
 // Fonad type checkers

@@ -1,9 +1,9 @@
-import { msgAndNotes } from './utils/string'
-import { insertNote, setNotes } from './utils/monadUtils'
+import { msgAndNotes } from '../utils/string'
+import { insertNote, setNotes } from '../utils/monadUtils'
 
 
 export const Ok = (operation, message) => {
-  let ok = {
+  const ok = {
     _tag: '@@FMonad',
     _type: 'Ok',
     _msg: `${operation}: ${message}`,

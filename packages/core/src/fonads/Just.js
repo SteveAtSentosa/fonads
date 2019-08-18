@@ -1,12 +1,12 @@
 import stringify from 'json-stringify-safe'
-import { msgAndNotes } from './utils/string'
-import { insertNote, setNotes } from './utils/monadUtils'
+import { msgAndNotes } from '../utils/string'
+import { insertNote, setNotes } from '../utils/monadUtils'
 
 
 export const Just = val => {
   // if val is already an FM return it as is (don't double wrap a monad)
   if (val && val._tag && val._tag === '@@FMonad') return val
-  let just = {
+  const just = {
     _tag: '@@FMonad',
     _type: 'Just',
     _val: val,

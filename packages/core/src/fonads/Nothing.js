@@ -1,7 +1,7 @@
-import { msgAndNotes, str } from './utils/string'
-import { isEmptyOrNil } from './utils/types'
-import { insertNote, setNotes } from './utils/monadUtils'
-import Fault from './Fault'
+import { msgAndNotes, str } from '../utils/string'
+import { isEmptyOrNil } from '../utils/types'
+import { insertNote, setNotes } from '../utils/monadUtils'
+import Fault from '../fonads/Fault'
 
 // TODO add opts, similar to Just, so nates can be added upon creation
 export const Nothing = (emptyOrNilVal=null) => {
@@ -10,12 +10,12 @@ export const Nothing = (emptyOrNilVal=null) => {
   if (!isEmptyOrNil(emptyOrNilVal))
     return Fault({ op: 'Creating Nothing', msg: `non empty value supplied: ${str(emptyOrNilVal)}` })
 
-  let nothing = {
+  const nothing = {
     _tag: '@@FMonad',
     _type: 'Nothing',
     _notes: [],
     _emptyOrNilVal: // undefined | null | [] | {}
-      isEmptyOrNil(emptyOrNilVal) ? emptyOrNilVal : 'non'
+      isEmptyOrNil(emptyOrNilVal) ? emptyOrNilVal : 'none'
   }
   nothing._this = nothing
 
