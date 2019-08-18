@@ -10,10 +10,10 @@ export default function runSmokeTests() {
       db = openConnection('local')
     })
 
-    it('should create a database', () => {
-      db.createDB('oioioi')
-        .then(() => console.log('DB Created')
-        .catch(e=> console.log('Error creawting DB: ', e))
-    })
+    // it('should create a database', () => {
+    //   db.createDB('oioioi')
+    //     .then(() => console.log('DB Created')
+    //     .catch(e=> console.log('Error creawting DB: ', e))
+    // })
   })
 }

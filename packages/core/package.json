@@ -1,7 +1,7 @@
 {
   "name": "@fonads/core",
-  "version": "0.0.0",
-  "main": "dist/fonads.js",
+  "version": "0.0.1",
+  "main": "src/fonads.js",
   "author": "Steven Saunders <steve@sentosatech.com>",
   "description": "Core fonads library",
   "license": "MIT",
@@ -18,7 +18,7 @@
     "build:umd:min": "webpack --mode=production --output-filename=fonads.min.js",
     "build": "yarn clean && yarn build:umd && yarn build:umd:min",
     "prepub": "yarn clean && yarn test && yarn build",
-    "test": "mocha --require .registerbabel7.js",
+    "test": "mocha --r ./.register.babel.js",
     "tinker": "babel-node tinker/tinker.js",
     "viz": "babel-node visualize/runVizualize.js",
     "watch:test": "onchange 'src/**/*.js' 'test/**/*.js' -- yarn test",
